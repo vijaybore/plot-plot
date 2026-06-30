@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -23,16 +23,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final repo = ref.read(authRepositoryProvider);
-      final user = await repo.signInWithGoogle();
-      if (user != null && mounted) {
-        ref.read(currentUserProvider.notifier).state = user;
-        _goHome();
-      }
+      await repo.signInWithGoogle();
     } catch (e) {
-      setState(() => _error = 'Google sign-in failed. Try guest mode.');
+      setState(() => _error = 'Google Sign-In needs Firebase (Phase 5). Use Guest mode.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -41,28 +40,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _playAsGuest() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _error = 'Please enter your name to play as guest.');
+      setState(() => _error = 'Please enter your name first.');
       return;
     }
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final repo = ref.read(authRepositoryProvider);
       final user = await repo.signInAsGuest(name);
       if (user != null && mounted) {
         ref.read(currentUserProvider.notifier).state = user;
-        _goHome();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
       }
     } catch (e) {
-      setState(() => _error = 'Something went wrong.');
+      setState(() => _error = 'Something went wrong. Try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _goHome() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
   }
 
   @override
@@ -73,7 +71,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D0D1A), Color(0xFF1A1A2E), Color(0xFF0F3460)],
+            colors: [
+              Color(0xFF0D0D1A),
+              Color(0xFF1A1A2E),
+              Color(0xFF0F3460),
+            ],
           ),
         ),
         child: SafeArea(
@@ -82,29 +84,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 60),
-
-                // ── Logo ──
                 _buildLogo(),
                 const SizedBox(height: 48),
-
-                // ── Google Sign In ──
                 _buildGoogleButton(),
                 const SizedBox(height: 24),
-
-                // ── Divider ──
                 _buildDivider(),
                 const SizedBox(height: 24),
-
-                // ── Guest Mode ──
                 _buildGuestSection(),
-                const SizedBox(height: 16),
-
-                // ── Error ──
-                if (_error != null) _buildError(),
-
+                if (_error != null) ...[
+                  const SizedBox(height: 16),
+                  _buildError(),
+                ],
                 const SizedBox(height: 40),
-
-                // ── Features ──
                 _buildFeatureList(),
                 const SizedBox(height: 32),
               ],
@@ -124,10 +115,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: BoxDecoration(
             color: AppColors.appCard,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 2),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.4),
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.3),
+                color: AppColors.primary.withValues(alpha: 0.3),
                 blurRadius: 24,
                 spreadRadius: 4,
               ),
@@ -185,7 +179,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF1A1A2E),
           elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: _isLoading
             ? const SizedBox(
@@ -193,11 +189,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 height: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : Row(
+            : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Google G logo using colored letters
-                  const Text(
+                  Text(
                     'G',
                     style: TextStyle(
                       fontSize: 22,
@@ -205,14 +200,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       color: Color(0xFF4285F4),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
+                  SizedBox(width: 12),
+                  Text(
                     'Continue with Google',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A2E),
-                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
@@ -224,15 +218,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: AppColors.textHint.withOpacity(0.4))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+        Expanded(
+          child: Divider(
+            color: AppColors.textHint.withValues(alpha: 0.4),
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'or play offline',
             style: TextStyle(color: AppColors.textHint, fontSize: 12),
           ),
         ),
-        Expanded(child: Divider(color: AppColors.textHint.withOpacity(0.4))),
+        Expanded(
+          child: Divider(
+            color: AppColors.textHint.withValues(alpha: 0.4),
+          ),
+        ),
       ],
     );
   }
@@ -273,7 +275,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.secondary,
               side: const BorderSide(color: AppColors.secondary, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ),
@@ -285,18 +289,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.danger.withOpacity(0.15),
+        color: AppColors.warning.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.danger.withOpacity(0.4)),
+        border: Border.all(
+          color: AppColors.warning.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
+          const Icon(Icons.info_outline, color: AppColors.warning, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _error!,
-              style: const TextStyle(color: AppColors.danger, fontSize: 13),
+              style: const TextStyle(color: AppColors.warning, fontSize: 13),
             ),
           ),
         ],
@@ -305,34 +311,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildFeatureList() {
-    final features = [
-      ('🏠', 'Buy plots & collect rent'),
-      ('🌾', 'Manage farms & businesses'),
-      ('🎡', 'Surprise & Lucky Wheel events'),
-      ('🌐', 'Online multiplayer with friends'),
-      ('🎤', 'Voice chat during games'),
-    ];
     return Column(
-      children: features
-          .map(
-            (f) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(
-                children: [
-                  Text(f.$1, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 12),
-                  Text(
-                    f.$2,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
+      children: [
+        _featureRow('🏠', 'Buy plots and collect rent'),
+        _featureRow('🌾', 'Manage farms and businesses'),
+        _featureRow('🎡', 'Surprise and Lucky Wheel events'),
+        _featureRow('🌐', 'Online multiplayer with friends'),
+        _featureRow('🎤', 'Voice chat during games'),
+      ],
+    );
+  }
+
+  Widget _featureRow(String emoji, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 12),
+          Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
             ),
-          )
-          .toList(),
+          ),
+        ],
+      ),
     );
   }
 }

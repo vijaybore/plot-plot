@@ -358,7 +358,6 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 // ── Tile Builder ──
 class TileBuilder {
   static List<TileModel> buildTiles(int boardSize) {
-    // Full implementation in Phase 3
-    return [];
+    return TileFactory.build(boardSize);
   }
 }

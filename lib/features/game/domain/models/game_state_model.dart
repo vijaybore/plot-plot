@@ -33,7 +33,6 @@ class GameStateModel extends Equatable {
   final bool isOnline;
   final String? adminId;
   final int? lastDiceValue;
-  final double bankBalance;
 
   const GameStateModel({
     required this.gameId,
@@ -49,21 +48,22 @@ class GameStateModel extends Equatable {
     this.isOnline = false,
     this.adminId,
     this.lastDiceValue,
-    this.bankBalance = double.infinity,
   });
 
   PlayerModel get currentPlayer => players[currentPlayerIndex];
 
   bool get allPropertiesOwned {
     final properties = tiles.where((t) => t.isPurchasable);
+    if (properties.isEmpty) return false;
     return properties.every((t) => t.isOwned);
   }
 
   int get nextPlayerIndex {
     int next = (currentPlayerIndex + 1) % players.length;
-    // Skip bankrupt players
-    while (players[next].isBankrupt && next != currentPlayerIndex) {
+    int loops = 0;
+    while (players[next].isBankrupt && loops < players.length) {
       next = (next + 1) % players.length;
+      loops++;
     }
     return next;
   }
@@ -88,7 +88,7 @@ class GameStateModel extends Equatable {
     bool? isOnline,
     String? adminId,
     int? lastDiceValue,
-    double? bankBalance,
+    bool clearEventMessage = false,
   }) {
     return GameStateModel(
       gameId: gameId ?? this.gameId,
@@ -100,68 +100,21 @@ class GameStateModel extends Equatable {
       boardSize: boardSize ?? this.boardSize,
       finalRoundsTotal: finalRoundsTotal ?? this.finalRoundsTotal,
       finalRoundsCurrent: finalRoundsCurrent ?? this.finalRoundsCurrent,
-      eventMessage: eventMessage ?? this.eventMessage,
+      eventMessage: clearEventMessage ? null : (eventMessage ?? this.eventMessage),
       isOnline: isOnline ?? this.isOnline,
       adminId: adminId ?? this.adminId,
       lastDiceValue: lastDiceValue ?? this.lastDiceValue,
-      bankBalance: bankBalance ?? this.bankBalance,
     );
   }
 
-  Map<String, dynamic> toMap() => {
-    'gameId': gameId,
-    'players': players.map((p) => p.toMap()).toList(),
-    'tiles': tiles.map((t) => t.toMap()).toList(),
-    'currentPlayerIndex': currentPlayerIndex,
-    'phase': phase.name,
-    'lastEvent': lastEvent.name,
-    'boardSize': boardSize,
-    'finalRoundsTotal': finalRoundsTotal,
-    'finalRoundsCurrent': finalRoundsCurrent,
-    'eventMessage': eventMessage,
-    'isOnline': isOnline,
-    'adminId': adminId,
-    'lastDiceValue': lastDiceValue,
-  };
-
-  factory GameStateModel.fromMap(Map<String, dynamic> map) => GameStateModel(
-    gameId: map['gameId'] ?? '',
-    players:
-        (map['players'] as List<dynamic>?)
-            ?.map((p) => PlayerModel.fromMap(p))
-            .toList() ??
-        [],
-    tiles:
-        (map['tiles'] as List<dynamic>?)
-            ?.map((t) => TileModel.fromMap(t))
-            .toList() ??
-        [],
-    currentPlayerIndex: map['currentPlayerIndex'] ?? 0,
-    phase: GamePhase.values.firstWhere(
-      (p) => p.name == map['phase'],
-      orElse: () => GamePhase.waiting,
-    ),
-    lastEvent: GameEvent.values.firstWhere(
-      (e) => e.name == map['lastEvent'],
-      orElse: () => GameEvent.none,
-    ),
-    boardSize: map['boardSize'] ?? 25,
-    finalRoundsTotal: map['finalRoundsTotal'] ?? 5,
-    finalRoundsCurrent: map['finalRoundsCurrent'] ?? 0,
-    eventMessage: map['eventMessage'],
-    isOnline: map['isOnline'] ?? false,
-    adminId: map['adminId'],
-    lastDiceValue: map['lastDiceValue'],
-  );
-
   @override
   List<Object?> get props => [
-    gameId,
-    players,
-    tiles,
-    currentPlayerIndex,
-    phase,
-    lastEvent,
-    finalRoundsCurrent,
-  ];
+        gameId,
+        players,
+        tiles,
+        currentPlayerIndex,
+        phase,
+        lastEvent,
+        finalRoundsCurrent,
+      ];
 }

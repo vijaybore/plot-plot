@@ -1,5 +1,5 @@
-import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:equatable/equatable.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 
@@ -45,8 +45,7 @@ class PlayerModel extends Equatable {
   Color get color => AppColors.playerColors[colorIndex % 7];
 
   double get netWorth {
-    double total = money;
-    total -= loanAmount;
+    double total = money - loanAmount;
     for (final farm in farms) {
       total += farm.value;
     }
@@ -94,114 +93,105 @@ class PlayerModel extends Equatable {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'displayName': displayName,
-      'photoUrl': photoUrl,
-      'money': money,
-      'position': position,
-      'ownedPropertyIds': ownedPropertyIds,
-      'farms': farms.map((f) => f.toMap()).toList(),
-      'businesses': businesses.map((b) => b.toMap()).toList(),
-      'loanAmount': loanAmount,
-      'hasShield': hasShield,
-      'skipNextTurn': skipNextTurn,
-      'isOnline': isOnline,
-      'isBankrupt': isBankrupt,
-      'role': role.name,
-      'colorIndex': colorIndex,
-      'rank': rank,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'displayName': displayName,
+        'photoUrl': photoUrl,
+        'money': money,
+        'position': position,
+        'ownedPropertyIds': ownedPropertyIds,
+        'farms': farms.map((f) => f.toMap()).toList(),
+        'businesses': businesses.map((b) => b.toMap()).toList(),
+        'loanAmount': loanAmount,
+        'hasShield': hasShield,
+        'skipNextTurn': skipNextTurn,
+        'isOnline': isOnline,
+        'isBankrupt': isBankrupt,
+        'role': role.name,
+        'colorIndex': colorIndex,
+        'rank': rank,
+      };
 
-  factory PlayerModel.fromMap(Map<String, dynamic> map) {
-    return PlayerModel(
-      id: map['id'] ?? '',
-      displayName: map['displayName'] ?? '',
-      photoUrl: map['photoUrl'],
-      money: (map['money'] ?? 0).toDouble(),
-      position: map['position'] ?? 0,
-      ownedPropertyIds: List<String>.from(map['ownedPropertyIds'] ?? []),
-      farms:
-          (map['farms'] as List<dynamic>?)
-              ?.map((f) => FarmModel.fromMap(f))
-              .toList() ??
-          [],
-      businesses:
-          (map['businesses'] as List<dynamic>?)
-              ?.map((b) => BusinessModel.fromMap(b))
-              .toList() ??
-          [],
-      loanAmount: (map['loanAmount'] ?? 0).toDouble(),
-      hasShield: map['hasShield'] ?? false,
-      skipNextTurn: map['skipNextTurn'] ?? false,
-      isOnline: map['isOnline'] ?? true,
-      isBankrupt: map['isBankrupt'] ?? false,
-      role: PlayerRole.values.firstWhere(
-        (r) => r.name == map['role'],
-        orElse: () => PlayerRole.player,
-      ),
-      colorIndex: map['colorIndex'] ?? 0,
-      rank: map['rank'] ?? 0,
-    );
-  }
+  factory PlayerModel.fromMap(Map<String, dynamic> map) => PlayerModel(
+        id: map['id'] ?? '',
+        displayName: map['displayName'] ?? '',
+        photoUrl: map['photoUrl'],
+        money: (map['money'] ?? 0).toDouble(),
+        position: map['position'] ?? 0,
+        ownedPropertyIds: List<String>.from(map['ownedPropertyIds'] ?? []),
+        farms: (map['farms'] as List<dynamic>?)
+                ?.map((f) => FarmModel.fromMap(f))
+                .toList() ??
+            [],
+        businesses: (map['businesses'] as List<dynamic>?)
+                ?.map((b) => BusinessModel.fromMap(b))
+                .toList() ??
+            [],
+        loanAmount: (map['loanAmount'] ?? 0).toDouble(),
+        hasShield: map['hasShield'] ?? false,
+        skipNextTurn: map['skipNextTurn'] ?? false,
+        isOnline: map['isOnline'] ?? true,
+        isBankrupt: map['isBankrupt'] ?? false,
+        role: PlayerRole.values.firstWhere(
+          (r) => r.name == map['role'],
+          orElse: () => PlayerRole.player,
+        ),
+        colorIndex: map['colorIndex'] ?? 0,
+        rank: map['rank'] ?? 0,
+      );
 
   @override
   List<Object?> get props => [
-    id,
-    money,
-    position,
-    ownedPropertyIds,
-    loanAmount,
-    hasShield,
-    skipNextTurn,
-    isBankrupt,
-    rank,
-  ];
+        id,
+        money,
+        position,
+        ownedPropertyIds,
+        loanAmount,
+        hasShield,
+        skipNextTurn,
+        isBankrupt,
+        rank,
+      ];
 }
 
-// ──────────────────────────────────────────
-// Farm Model
-// ──────────────────────────────────────────
+// ── Farm Model ──────────────────────────────────────
 class FarmModel extends Equatable {
   final String id;
   final int level;
   final bool isMortgaged;
 
-  const FarmModel({required this.id, this.level = 1, this.isMortgaged = false});
+  const FarmModel({
+    required this.id,
+    this.level = 1,
+    this.isMortgaged = false,
+  });
 
-  double get income =>
-      AppConstants.farmIncome[level] ?? AppConstants.farmIncome[1]!;
+  double get income => AppConstants.farmIncome[level] ?? 50000;
   double get value => income * 3;
 
-  FarmModel copyWith({int? level, bool? isMortgaged}) {
-    return FarmModel(
-      id: id,
-      level: level ?? this.level,
-      isMortgaged: isMortgaged ?? this.isMortgaged,
-    );
-  }
+  FarmModel copyWith({int? level, bool? isMortgaged}) => FarmModel(
+        id: id,
+        level: level ?? this.level,
+        isMortgaged: isMortgaged ?? this.isMortgaged,
+      );
 
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'level': level,
-    'isMortgaged': isMortgaged,
-  };
+        'id': id,
+        'level': level,
+        'isMortgaged': isMortgaged,
+      };
 
   factory FarmModel.fromMap(Map<String, dynamic> map) => FarmModel(
-    id: map['id'] ?? '',
-    level: map['level'] ?? 1,
-    isMortgaged: map['isMortgaged'] ?? false,
-  );
+        id: map['id'] ?? '',
+        level: map['level'] ?? 1,
+        isMortgaged: map['isMortgaged'] ?? false,
+      );
 
   @override
   List<Object?> get props => [id, level, isMortgaged];
 }
 
-// ──────────────────────────────────────────
-// Business Model
-// ──────────────────────────────────────────
+// ── Business Model ───────────────────────────────────
 enum BusinessType { shop, warehouse, hotel }
 
 class BusinessModel extends Equatable {
@@ -217,49 +207,36 @@ class BusinessModel extends Equatable {
     this.level = 1,
   });
 
-  int get value {
-    switch (type) {
-      case BusinessType.shop:
-        return 300000 * level;
-      case BusinessType.warehouse:
-        return 500000 * level;
-      case BusinessType.hotel:
-        return 800000 * level;
-    }
+  double get value {
+  switch (type) {
+    case BusinessType.shop:
+      return 300000.0 * level;
+    case BusinessType.warehouse:
+      return 500000.0 * level;
+    case BusinessType.hotel:
+      return 800000.0 * level;
   }
+}
 
   double get passiveIncome => value * 0.05;
 
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'propertyId': propertyId,
-    'type': type.name,
-    'level': level,
-  };
+        'id': id,
+        'propertyId': propertyId,
+        'type': type.name,
+        'level': level,
+      };
 
   factory BusinessModel.fromMap(Map<String, dynamic> map) => BusinessModel(
-    id: map['id'] ?? '',
-    propertyId: map['propertyId'] ?? '',
-    type: BusinessType.values.firstWhere(
-      (t) => t.name == map['type'],
-      orElse: () => BusinessType.shop,
-    ),
-    level: map['level'] ?? 1,
-  );
+        id: map['id'] ?? '',
+        propertyId: map['propertyId'] ?? '',
+        type: BusinessType.values.firstWhere(
+          (t) => t.name == map['type'],
+          orElse: () => BusinessType.shop,
+        ),
+        level: map['level'] ?? 1,
+      );
 
   @override
   List<Object?> get props => [id, propertyId, type, level];
-}
-
-// needed by PlayerModel color getter
-class AppColors {
-  static const List<Color> playerColors = [
-    Color(0xFF6C63FF),
-    Color(0xFFE74C3C),
-    Color(0xFF00D4AA),
-    Color(0xFFFFD700),
-    Color(0xFFFF6B6B),
-    Color(0xFF4ECDC4),
-    Color(0xFFFF9FF3),
-  ];
 }

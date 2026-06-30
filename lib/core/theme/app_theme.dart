@@ -1,47 +1,63 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Main palette
-  static const Color primary = Color(0xFF6C63FF);
+  // ── App chrome ──
+  static const Color appBg      = Color(0xFF1A1A2E);
+  static const Color appCard    = Color(0xFF16213E);
+  static const Color appSurface = Color(0xFF0F3460);
+  static const Color appBorder  = Color(0xFF2A2A4A);
+
+  // ── Primary palette ──
+  static const Color primary   = Color(0xFF6C63FF);
   static const Color secondary = Color(0xFF00D4AA);
-  static const Color accent = Color(0xFFFFD700);
+  static const Color accent    = Color(0xFFFFB300);
 
-  // Background shades
-  static const Color bgDark = Color(0xFF0D0D1A);
-  static const Color bgMedium = Color(0xFF1A1A2E);
-  static const Color bgCard = Color(0xFF16213E);
-  static const Color bgSurface = Color(0xFF1E2A4A);
+  // ── Board ──
+  static const Color boardBg        = Color(0xFFF5F0E8);
+  static const Color boardBorder    = Color(0xFFCCBB99);
+  static const Color boardRoad      = Color(0xFFD4C9B0);
+  static const Color boardGrass     = Color(0xFF4CAF50);
+  static const Color boardGrassLight = Color(0xFF66BB6A);
 
-  // Board colors
-  static const Color roadColor = Color(0xFF2C2C3E);
-  static const Color grassColor = Color(0xFF1B4332);
-  static const Color startTile = Color(0xFF00D4AA);
-  static const Color surpriseTile = Color(0xFF9B59B6);
-  static const Color luckyTile = Color(0xFFFFD700);
-  static const Color taxTile = Color(0xFFE74C3C);
-  static const Color bankTile = Color(0xFF2ECC71);
+  // ── Tile colors ──
+  static const Color tileWhite  = Color(0xFFFFFDE7);
+  static const Color tileGreen  = Color(0xFFA5D6A7);
+  static const Color tileOrange = Color(0xFFFFCC80);
+  static const Color tilePurple = Color(0xFFCE93D8);
+  static const Color tileBlue   = Color(0xFF90CAF9);
+  static const Color tileRed    = Color(0xFFEF9A9A);
+  static const Color tileYellow = Color(0xFFFFF176);
 
-  // Player token colors (up to 7 players)
+  static const Color startTile    = Color(0xFF1A1A2E);
+  static const Color surpriseTile = Color(0xFFFF9800);
+  static const Color luckyTile    = Color(0xFFFFD700);
+  static const Color taxTile      = Color(0xFFE74C3C);
+  static const Color bankTile     = Color(0xFF1565C0);
+  static const Color parkingTile  = Color(0xFF2E7D32);
+
+  // ── Player token colors ──
   static const List<Color> playerColors = [
-    Color(0xFF6C63FF), // Purple
-    Color(0xFFE74C3C), // Red
-    Color(0xFF00D4AA), // Teal
-    Color(0xFFFFD700), // Gold
-    Color(0xFFFF6B6B), // Coral
-    Color(0xFF4ECDC4), // Mint
-    Color(0xFFFF9FF3), // Pink
+    Color(0xFF2196F3),
+    Color(0xFFE74C3C),
+    Color(0xFF4CAF50),
+    Color(0xFFFFD700),
+    Color(0xFF9C27B0),
+    Color(0xFFFF5722),
+    Color(0xFF00BCD4),
   ];
 
-  // Status colors
+  // ── Status ──
   static const Color success = Color(0xFF2ECC71);
-  static const Color danger = Color(0xFFE74C3C);
+  static const Color danger  = Color(0xFFE74C3C);
   static const Color warning = Color(0xFFF39C12);
-  static const Color info = Color(0xFF3498DB);
+  static const Color info    = Color(0xFF3498DB);
 
-  // Text
-  static const Color textPrimary = Color(0xFFFFFFFF);
+  // ── Text ──
+  static const Color textPrimary   = Color(0xFFFFFFFF);
   static const Color textSecondary = Color(0xFFB2BEC3);
-  static const Color textHint = Color(0xFF636E72);
+  static const Color textHint      = Color(0xFF636E72);
+  static const Color textDark      = Color(0xFF1A1A2E);
+  static const Color textGold      = Color(0xFFFFB300);
 }
 
 class AppTheme {
@@ -52,12 +68,12 @@ class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
         secondary: AppColors.secondary,
-        surface: AppColors.bgCard,
+        surface: AppColors.appCard,
         error: AppColors.danger,
       ),
-      scaffoldBackgroundColor: AppColors.bgDark,
+      scaffoldBackgroundColor: AppColors.appBg,
       cardTheme: const CardThemeData(
-        color: AppColors.bgCard,
+        color: AppColors.appCard,
         elevation: 8,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
@@ -74,7 +90,7 @@ class AppTheme {
           ),
           textStyle: const TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
         ),
@@ -91,14 +107,14 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.bgSurface,
+        fillColor: AppColors.appSurface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.bgSurface),
+          borderSide: const BorderSide(color: AppColors.appBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -110,15 +126,12 @@ class AppTheme {
         ),
         labelStyle: const TextStyle(color: AppColors.textSecondary),
         hintStyle: const TextStyle(color: AppColors.textHint),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.bgMedium,
+        backgroundColor: AppColors.appBg,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         titleTextStyle: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 20,
@@ -127,36 +140,17 @@ class AppTheme {
         iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
       textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-        ),
-        displayMedium: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-        titleLarge: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-        ),
-        titleMedium: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
+        displayLarge: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold),
+        displayMedium: TextStyle(color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.bold),
+        titleLarge: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+        titleMedium: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
         bodyLarge: TextStyle(color: AppColors.textPrimary, fontSize: 16),
         bodyMedium: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         bodySmall: TextStyle(color: AppColors.textHint, fontSize: 12),
       ),
-      dividerTheme: const DividerThemeData(
-        color: AppColors.bgSurface,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: AppColors.appBorder, thickness: 1),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.bgSurface,
+        backgroundColor: AppColors.appSurface,
         contentTextStyle: const TextStyle(color: AppColors.textPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
