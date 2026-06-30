@@ -43,3 +43,22 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.g.dart
+*.freezed.dart
+
+# Firebase - NEVER commit these
+google-services.json
+GoogleService-Info.plist
+.env
+firebase_options.dart
+
+# IDE
+.idea/
+.vscode/settings.json
+*.iml

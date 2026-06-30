@@ -52,8 +52,7 @@ class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: AppColors.primary,
         secondary: AppColors.secondary,
-        surface: Color.fromARGB(255, 60, 76, 120),
-        surface: Color.fromARGB(255, 88, 88, 192),
+        surface: AppColors.bgCard,
         error: AppColors.danger,
       ),
       scaffoldBackgroundColor: AppColors.bgDark,
