@@ -4,6 +4,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../features/game/domain/models/player_model.dart';
+import '../../../../features/game/domain/models/tile_model.dart';
 import '../../../../features/game/domain/models/game_state_model.dart';
 import 'game_screen.dart';
 
@@ -24,28 +25,30 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
   bool _enableLuckyWheel = true;
   bool _enableTax = true;
 
-  // Offline player names
   final List<TextEditingController> _nameControllers =
       List.generate(7, (_) => TextEditingController());
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill first player from logged-in user
     final user = ref.read(currentUserProvider);
-    if (user != null) _nameControllers[0].text = user.displayName;
+    if (user != null) {
+      _nameControllers[0].text = user.displayName;
+    }
   }
 
   @override
   void dispose() {
-    for (final c in _nameControllers) c.dispose();
+    for (final c in _nameControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   void _startGame() {
-    // Build player list
     final List<PlayerModel> players = [];
-    final startMoney = AppConstants.startingMoneyByPlayers[_playerCount] ??
+    final startMoney =
+        AppConstants.startingMoneyByPlayers[_playerCount] ??
         AppConstants.startingMoneyByPlayers[4]!;
 
     for (int i = 0; i < _playerCount; i++) {
@@ -60,7 +63,6 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       ));
     }
 
-    // Build tiles
     final tiles = TileBuilder.buildTiles(_boardSize);
 
     final gameState = GameStateModel(
@@ -74,7 +76,9 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
     );
 
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => GameScreen(initialState: gameState)),
+      MaterialPageRoute(
+        builder: (_) => GameScreen(initialState: gameState),
+      ),
     );
   }
 
@@ -91,19 +95,19 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionTitle('Board Size'),
+            _sectionTitle('Board Size'),
             _buildBoardSizeSelector(),
             const SizedBox(height: 20),
-            _buildSectionTitle('Number of Players'),
+            _sectionTitle('Number of Players'),
             _buildPlayerCountSelector(),
             const SizedBox(height: 20),
-            _buildSectionTitle('Player Names'),
+            _sectionTitle('Player Names'),
             _buildPlayerNameFields(),
             const SizedBox(height: 20),
-            _buildSectionTitle('End Game After'),
+            _sectionTitle('End Game After'),
             _buildEndRoundSelector(),
             const SizedBox(height: 20),
-            _buildSectionTitle('Game Features'),
+            _sectionTitle('Game Features'),
             _buildToggles(),
             const SizedBox(height: 32),
             _buildStartButton(),
@@ -114,14 +118,17 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) => Padding(
+  Widget _sectionTitle(String title) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(title,
-            style: const TextStyle(
-                color: AppColors.accent,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1)),
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.accent,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
+          ),
+        ),
       );
 
   Widget _buildBoardSizeSelector() {
@@ -143,15 +150,21 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
               ),
               child: Column(
                 children: [
-                  Text('$size',
-                      style: TextStyle(
-                          color: selected ? Colors.white : AppColors.textSecondary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800)),
-                  Text('plots',
-                      style: TextStyle(
-                          color: selected ? Colors.white70 : AppColors.textHint,
-                          fontSize: 11)),
+                  Text(
+                    '$size',
+                    style: TextStyle(
+                      color: selected ? Colors.white : AppColors.textSecondary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'plots',
+                    style: TextStyle(
+                      color: selected ? Colors.white70 : AppColors.textHint,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -180,10 +193,14 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
                 ),
               ),
               child: Center(
-                child: Text('$count',
-                    style: TextStyle(
-                        color: selected ? Colors.white : AppColors.textSecondary,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color:
+                        selected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ),
@@ -205,11 +222,14 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
               prefixIcon: CircleAvatar(
                 radius: 14,
                 backgroundColor: AppColors.playerColors[i],
-                child: Text('${i + 1}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  '${i + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ),
@@ -236,11 +256,15 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
                 ),
               ),
               child: Center(
-                child: Text('$r Rounds',
-                    style: TextStyle(
-                        color: selected ? Colors.white : AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
+                child: Text(
+                  '$r Rounds',
+                  style: TextStyle(
+                    color:
+                        selected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
               ),
             ),
           ),
@@ -251,11 +275,28 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 
   Widget _buildToggles() {
     final toggles = [
-      ('Farms & Businesses', _enableFarms, (v) => setState(() => _enableFarms = v)),
-      ('Surprise Tiles', _enableSurprise, (v) => setState(() => _enableSurprise = v)),
-      ('Lucky Wheel', _enableLuckyWheel, (v) => setState(() => _enableLuckyWheel = v)),
-      ('Tax Tiles', _enableTax, (v) => setState(() => _enableTax = v)),
+      (
+        'Farms & Businesses',
+        _enableFarms,
+        (bool v) => setState(() => _enableFarms = v)
+      ),
+      (
+        'Surprise Tiles',
+        _enableSurprise,
+        (bool v) => setState(() => _enableSurprise = v)
+      ),
+      (
+        'Lucky Wheel',
+        _enableLuckyWheel,
+        (bool v) => setState(() => _enableLuckyWheel = v)
+      ),
+      (
+        'Tax Tiles',
+        _enableTax,
+        (bool v) => setState(() => _enableTax = v)
+      ),
     ];
+
     return Column(
       children: toggles.map((t) {
         return Container(
@@ -268,14 +309,19 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
           ),
           child: Row(
             children: [
-              Text(t.$1,
-                  style: const TextStyle(
-                      color: AppColors.textPrimary, fontSize: 14)),
+              Text(
+                t.$1,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                ),
+              ),
               const Spacer(),
               Switch(
                 value: t.$2,
                 onChanged: t.$3,
-                activeColor: AppColors.secondary,
+                activeThumbColor: Colors.white,   // fixed deprecation
+                activeTrackColor: AppColors.secondary,
               ),
             ],
           ),
@@ -292,23 +338,27 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
         onPressed: _startGame,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.success,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: const Text(
           'START GAME',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Tile Builder helper ──
+// ── Tile Builder ──
 class TileBuilder {
-  static List<dynamic> buildTiles(int boardSize) {
-    // This will be fully built in Phase 3
-    // Returning empty list placeholder for now
+  static List<TileModel> buildTiles(int boardSize) {
+    // Full implementation in Phase 3
     return [];
   }
 }

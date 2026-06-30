@@ -50,7 +50,7 @@ class HomeScreen extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: Colors.black.withValues(alpha:0.3),
         border: Border(
           bottom: BorderSide(color: AppColors.appBorder, width: 1),
         ),
@@ -77,7 +77,7 @@ class HomeScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppColors.appCard,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.4)),
             ),
             child: Row(
               children: [
@@ -112,7 +112,7 @@ class HomeScreen extends ConsumerWidget {
         border: Border.all(color: AppColors.boardBorder, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha:0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -138,7 +138,7 @@ class HomeScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.5),
+                          color: AppColors.primary.withValues(alpha:0.5),
                           blurRadius: 16,
                         ),
                       ],
@@ -287,34 +287,34 @@ class _MiniBoardPainter extends CustomPainter {
     // Top row
     for (int i = 0; i < 7; i++) {
       final rect = Rect.fromLTWH(edgePad + i * tileW, edgePad, tileW, tileH);
-      tilePaint.color = colors[i % colors.length].withOpacity(0.7);
+      tilePaint.color = colors[i % colors.length].withValues(alpha:0.7);
       canvas.drawRect(rect, tilePaint);
       canvas.drawRect(rect, borderPaint);
     }
     // Bottom row
     for (int i = 0; i < 7; i++) {
       final rect = Rect.fromLTWH(edgePad + i * tileW, size.height - edgePad - tileH, tileW, tileH);
-      tilePaint.color = colors[(i + 2) % colors.length].withOpacity(0.7);
+      tilePaint.color = colors[(i + 2) % colors.length].withValues(alpha:0.7);
       canvas.drawRect(rect, tilePaint);
       canvas.drawRect(rect, borderPaint);
     }
     // Left column
     for (int i = 0; i < 4; i++) {
       final rect = Rect.fromLTWH(edgePad, edgePad + tileH + i * tileH, tileW, tileH);
-      tilePaint.color = colors[(i + 1) % colors.length].withOpacity(0.7);
+      tilePaint.color = colors[(i + 1) % colors.length].withValues(alpha:0.7);
       canvas.drawRect(rect, tilePaint);
       canvas.drawRect(rect, borderPaint);
     }
     // Right column
     for (int i = 0; i < 4; i++) {
       final rect = Rect.fromLTWH(size.width - edgePad - tileW, edgePad + tileH + i * tileH, tileW, tileH);
-      tilePaint.color = colors[(i + 3) % colors.length].withOpacity(0.7);
+      tilePaint.color = colors[(i + 3) % colors.length].withValues(alpha:0.7);
       canvas.drawRect(rect, tilePaint);
       canvas.drawRect(rect, borderPaint);
     }
 
     // Center green area
-    final greenPaint = Paint()..color = AppColors.boardGrass.withOpacity(0.6);
+    final greenPaint = Paint()..color = AppColors.boardGrass.withValues(alpha:0.6);
     final centerRect = Rect.fromLTWH(
       edgePad + tileW + 4,
       edgePad + tileH + 4,
@@ -357,10 +357,10 @@ class _ModeCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [color.withOpacity(0.2), color.withOpacity(0.05)],
+            colors: [color.withValues(alpha:0.2), color.withValues(alpha:0.05)],
           ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          border: Border.all(color: color.withValues(alpha:0.5), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
