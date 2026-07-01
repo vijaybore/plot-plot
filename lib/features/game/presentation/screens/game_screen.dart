@@ -48,6 +48,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         landedTile.isPurchasable &&
         !landedTile.isOwned &&
         gs.lastEvent == GameEvent.landedOnProperty;
+    final showRename = landedTile != null &&
+        landedTile.isOwned &&
+        landedTile.ownerId == currentPlayer.id &&
+        gs.lastEvent == GameEvent.landedOnProperty;
 
     return Scaffold(
       backgroundColor: AppColors.appBg,
@@ -55,20 +59,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         child: Column(children: [
           _topBar(context, gs),
           if (gs.eventMessage != null) _banner(gs.eventMessage!),
-          // Board — square and responsive
+          // Board — lane-based township layout
           Expanded(
-            flex: 5,
+            flex: 6,
             child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: GameBoardWidget(
-                    tiles: gs.tiles,
-                    players: gs.players,
-                    centerWidget: _center(gs, isRolling),
-                  ),
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: GameBoardWidget(
+                tiles: gs.tiles,
+                players: gs.players,
+                centerWidget: _center(gs, isRolling),
               ),
             ),
           ),
@@ -82,7 +81,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ),
           const SizedBox(height: 4),
           // Action buttons
-          _actions(gs, isRolling, showBuy),
+          _actions(gs, isRolling, showBuy, showRename, landedTile),
           const SizedBox(height: 8),
         ]),
       ),
@@ -217,7 +216,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _actions(GameStateModel gs, bool isRolling, bool showBuy) {
+  Widget _actions(GameStateModel gs, bool isRolling, bool showBuy,
+      bool showRename, TileModel? landedTile) {
     if (showBuy) {
       final tile = gs.tiles[gs.currentPlayer.position];
       return Padding(
@@ -229,10 +229,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           const SizedBox(height: 6),
           Row(children: [
             Expanded(child: ElevatedButton(
-              onPressed: () {
-                ref.read(gameProvider.notifier).buyProperty(gs.currentPlayer.id);
-                ref.read(gameProvider.notifier).endTurn();
-              },
+              onPressed: () => _promptPlotName(tile, gs),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.success,
                 shape: RoundedRectangleBorder(
@@ -253,6 +250,40 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text('SKIP'),
+            )),
+          ]),
+        ]),
+      );
+    }
+
+    if (showRename && landedTile != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        child: Column(children: [
+          Text('🏡 ${landedTile.displayName}  ·  Your plot',
+            style: const TextStyle(color: AppColors.textPrimary,
+                fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              onPressed: () => _promptRenamePlot(landedTile, gs),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('✏️ RENAME'),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: ElevatedButton(
+              onPressed: () => ref.read(gameProvider.notifier).endTurn(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('END TURN', style: TextStyle(fontWeight: FontWeight.w900)),
             )),
           ]),
         ]),
@@ -351,6 +382,110 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             )),
         ),
       ])),
+    );
+  }
+
+  void _promptPlotName(TileModel tile, GameStateModel gs) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.appCard,
+        title: const Text('Name Your Plot 🏷️',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            'Give "${tile.name}" a custom name (or leave blank to keep the default).',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 24,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: tile.name,
+              hintStyle: const TextStyle(color: AppColors.textSecondary),
+              filled: true,
+              fillColor: AppColors.appSurface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(gameProvider.notifier).buyProperty(gs.currentPlayer.id);
+              ref.read(gameProvider.notifier).endTurn();
+            },
+            child: const Text('Skip Naming',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(gameProvider.notifier).buyProperty(
+                    gs.currentPlayer.id,
+                    customName: controller.text,
+                  );
+              ref.read(gameProvider.notifier).endTurn();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('CONFIRM', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _promptRenamePlot(TileModel tile, GameStateModel gs) {
+    final controller = TextEditingController(text: tile.displayName);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.appCard,
+        title: const Text('Rename Plot ✏️',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 24,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.appSurface,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(gameProvider.notifier).renamePlot(
+                    gs.currentPlayer.id,
+                    tile.index,
+                    controller.text,
+                  );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
     );
   }
 

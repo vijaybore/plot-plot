@@ -40,7 +40,8 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     await Future.delayed(const Duration(milliseconds: 800));
 
     final diceValue = _rng.nextInt(6) + 1;
-    final newPosition = (currentPlayer.position + diceValue) % gs.boardSize;
+    final totalTiles = gs.tiles.isNotEmpty ? gs.tiles.length : gs.boardSize;
+    final newPosition = (currentPlayer.position + diceValue) % totalTiles;
     final passedGo = newPosition < currentPlayer.position;
     final salaryBonus = passedGo ? _getSalary(gs.boardSize) : 0.0;
 
@@ -91,6 +92,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
         await _handleSurprise();
 
       case TileType.property:
+      case TileType.farmZone:
         if (tile.isOwned && tile.ownerId != currentPlayer.id) {
           await _collectRent(tile);
         }
@@ -176,7 +178,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     );
   }
 
-  void buyProperty(String playerId) {
+  void buyProperty(String playerId, {String? customName}) {
     if (state == null) return;
     final gs = state!;
     final player = gs.players.firstWhere((p) => p.id == playerId);
@@ -185,9 +187,16 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     if (!tile.isPurchasable || tile.isOwned) return;
     if (player.money < tile.price!) return;
 
+    final trimmedName = customName?.trim();
+    final nameToUse = (trimmedName != null && trimmedName.isNotEmpty)
+        ? trimmedName
+        : null;
+
     state = gs.copyWith(
       tiles: gs.tiles.map((t) =>
-        t.index == tile.index ? t.copyWith(ownerId: playerId) : t).toList(),
+        t.index == tile.index
+            ? t.copyWith(ownerId: playerId, customName: nameToUse)
+            : t).toList(),
       players: gs.players.map((p) {
         if (p.id == playerId) {
           return p.copyWith(
@@ -197,14 +206,36 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
         }
         return p;
       }).toList(),
-      eventMessage: '🏠 ${player.displayName} bought ${tile.displayName} for ${_fmt(tile.price!)}!',
+      eventMessage: '🏠 ${player.displayName} bought '
+          '${nameToUse ?? tile.displayName} for ${_fmt(tile.price!)}!',
       lastEvent: GameEvent.propertyBought,
     );
   }
-void skipProperty() {
-  if (state == null) return;
-  state = state!.copyWith(lastEvent: GameEvent.none, clearEventMessage: true);
-}
+
+  /// Renames a plot the player already owns. Used both for the initial
+  /// "name your plot" flow right after purchase and for later renaming
+  /// from the property details / dashboard screens.
+  void renamePlot(String playerId, int tileIndex, String newName) {
+    if (state == null) return;
+    final gs = state!;
+    final tile = gs.tiles[tileIndex];
+
+    if (tile.ownerId != playerId) return; // only the owner can rename
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+
+    state = gs.copyWith(
+      tiles: gs.tiles.map((t) =>
+        t.index == tileIndex ? t.copyWith(customName: trimmed) : t).toList(),
+      eventMessage: '✏️ Plot renamed to "$trimmed"',
+    );
+  }
+
+  void skipProperty() {
+    if (state == null) return;
+    state = state!.copyWith(lastEvent: GameEvent.none, clearEventMessage: true);
+  }
+
   void endTurn() {
     if (state == null) return;
     final gs = state!;
@@ -256,6 +287,7 @@ void skipProperty() {
   GameEvent _eventForTile(TileModel tile) {
     switch (tile.type) {
       case TileType.property:   return GameEvent.landedOnProperty;
+      case TileType.farmZone:   return GameEvent.landedOnProperty;
       case TileType.surprise:   return GameEvent.landedOnSurprise;
       case TileType.luckyWheel: return GameEvent.landedOnLuckyWheel;
       case TileType.tax:        return GameEvent.landedOnTax;

@@ -1,20 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:equatable/equatable.dart';
 
-enum TileType { start, property, surprise, luckyWheel, tax, bank }
+// Keep luckyWheel so GameEvent enum in provider stays unchanged
+enum TileType { start, property, farmZone, surprise, luckyWheel, tax, bank }
+
+enum PlotType {
+  residential,
+  farm,
+  commercial,
+  industrial,
+  corner,
+  lakeView,
+  premium,
+  highwayFacing,
+  garden,
+  luxury,
+}
 
 class TileModel extends Equatable {
-  final int index;
+  final int index;           // flat position in movement array
   final TileType type;
-  final String name;
+  final String name;         // auto-generated base name (always present)
   final double? price;
   final double? baseRent;
   final String? ownerId;
-  final int upgradeLevel;
-  final String? customName;
-  final Color? customColor;
-  final bool isAuction;
-  final int side; // 0=bottom 1=left 2=top 3=right
+  final int upgradeLevel;    // 1=empty … 7=luxury tower
+  final String? customName;  // player-assigned brand name (can change)
+  final int lane;            // 0 = main-road/start, 1..N = lane number
+  final int positionInLane;  // 0-indexed slot within its lane
+  final String plotNumber;   // "P-001" — permanent, never changes
+  final PlotType plotType;
 
   const TileModel({
     required this.index,
@@ -25,68 +40,101 @@ class TileModel extends Equatable {
     this.ownerId,
     this.upgradeLevel = 1,
     this.customName,
-    this.customColor,
-    this.isAuction = false,
-    required this.side,
+    required this.lane,
+    required this.positionInLane,
+    required this.plotNumber,
+    this.plotType = PlotType.residential,
   });
 
   bool get isOwned => ownerId != null;
-  bool get isPurchasable => type == TileType.property && price != null;
+
+  bool get isPurchasable =>
+      (type == TileType.property || type == TileType.farmZone) &&
+      price != null;
 
   String get displayName => customName ?? name;
 
+  // ── Development ladder ──────────────────────────────────────────
+  String get upgradeName {
+    switch (upgradeLevel) {
+      case 2: return 'Boundary Wall';
+      case 3: return 'House';
+      case 4: return 'Villa';
+      case 5: return 'Apartment';
+      case 6: return 'Commercial Complex';
+      case 7: return 'Luxury Tower';
+      default: return 'Empty Plot';
+    }
+  }
+
+  String get upgradeEmoji {
+    switch (upgradeLevel) {
+      case 2: return '🧱';
+      case 3: return '🏠';
+      case 4: return '🏡';
+      case 5: return '🏢';
+      case 6: return '🏬';
+      case 7: return '🏙️';
+      default: return '🌱';
+    }
+  }
+
+  bool get canUpgrade => isPurchasable && isOwned && upgradeLevel < 7;
+
+  double get upgradeCost {
+    if (price == null) return 0;
+    return price! * (0.4 + upgradeLevel * 0.2);
+  }
+
   double get currentRent {
     if (baseRent == null) return 0;
-    switch (upgradeLevel) {
-      case 2: return baseRent! * 1.5;
-      case 3: return baseRent! * 2.0;
-      default: return baseRent!;
-    }
+    return baseRent! * (1.0 + (upgradeLevel - 1) * 0.5);
   }
 
   double get currentValue {
     if (price == null) return 0;
-    switch (upgradeLevel) {
-      case 2: return price! * 1.5;
-      case 3: return price! * 2.0;
-      default: return price!;
+    return price! * (1.0 + (upgradeLevel - 1) * 0.6);
+  }
+
+  // ── Plot type colors & labels ────────────────────────────────────
+  Color get plotTypeColor {
+    switch (plotType) {
+      case PlotType.residential:   return const Color(0xFFB8E6B8);
+      case PlotType.farm:          return const Color(0xFFD4E887);
+      case PlotType.commercial:    return const Color(0xFFADD8F0);
+      case PlotType.industrial:    return const Color(0xFFD4C5B0);
+      case PlotType.corner:        return const Color(0xFFFFDDA0);
+      case PlotType.lakeView:      return const Color(0xFFA0E8E8);
+      case PlotType.premium:       return const Color(0xFFE8C8F0);
+      case PlotType.highwayFacing: return const Color(0xFFFFBDBD);
+      case PlotType.garden:        return const Color(0xFFA0D8C8);
+      case PlotType.luxury:        return const Color(0xFFFFF0A0);
     }
   }
 
-  Color get tileColor {
-    if (customColor != null) return customColor!;
-    switch (type) {
-      case TileType.start:      return const Color(0xFF1A1A2E);
-      case TileType.property:   return const Color(0xFFFFFDE7);
-      case TileType.surprise:   return const Color(0xFFFF9800);
-      case TileType.luckyWheel: return const Color(0xFFFFD700);
-      case TileType.tax:        return const Color(0xFFE74C3C);
-      case TileType.bank:       return const Color(0xFF1565C0);
+  String get plotTypeLabel {
+    switch (plotType) {
+      case PlotType.residential:   return 'RES';
+      case PlotType.farm:          return 'FARM';
+      case PlotType.commercial:    return 'COM';
+      case PlotType.industrial:    return 'IND';
+      case PlotType.corner:        return 'CRN';
+      case PlotType.lakeView:      return 'LAKE';
+      case PlotType.premium:       return 'PRM';
+      case PlotType.highwayFacing: return 'HWY';
+      case PlotType.garden:        return 'GDN';
+      case PlotType.luxury:        return 'LUX';
     }
   }
 
-  // Property group color (top strip color like Monopoly)
-  Color get groupColor {
-    if (type != TileType.property) return tileColor;
-    final groups = [
-      const Color(0xFF8B4513), // brown
-      const Color(0xFF87CEEB), // light blue
-      const Color(0xFFFF69B4), // pink
-      const Color(0xFFFF8C00), // orange
-      const Color(0xFFFF0000), // red
-      const Color(0xFFFFFF00), // yellow
-      const Color(0xFF228B22), // green
-      const Color(0xFF00008B), // dark blue
-    ];
-    return groups[index % groups.length];
-  }
+  // Backward-compat: groupColor used in old tile widget
+  Color get groupColor => plotTypeColor;
 
   TileModel copyWith({
     String? ownerId,
     int? upgradeLevel,
     String? customName,
-    Color? customColor,
-    bool? isAuction,
+    bool clearCustomName = false,
   }) {
     return TileModel(
       index: index,
@@ -96,121 +144,231 @@ class TileModel extends Equatable {
       baseRent: baseRent,
       ownerId: ownerId ?? this.ownerId,
       upgradeLevel: upgradeLevel ?? this.upgradeLevel,
-      customName: customName ?? this.customName,
-      customColor: customColor ?? this.customColor,
-      isAuction: isAuction ?? this.isAuction,
-      side: side,
+      customName: clearCustomName ? null : (customName ?? this.customName),
+      lane: lane,
+      positionInLane: positionInLane,
+      plotNumber: plotNumber,
+      plotType: plotType,
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'index': index,
-        'type': type.name,
-        'name': name,
-        'price': price,
-        'baseRent': baseRent,
-        'ownerId': ownerId,
-        'upgradeLevel': upgradeLevel,
-        'customName': customName,
-        'isAuction': isAuction,
-        'side': side,
-      };
+    'index': index,
+    'type': type.name,
+    'name': name,
+    'price': price,
+    'baseRent': baseRent,
+    'ownerId': ownerId,
+    'upgradeLevel': upgradeLevel,
+    'customName': customName,
+    'lane': lane,
+    'positionInLane': positionInLane,
+    'plotNumber': plotNumber,
+    'plotType': plotType.name,
+  };
 
   factory TileModel.fromMap(Map<String, dynamic> map) => TileModel(
-        index: map['index'] ?? 0,
-        type: TileType.values.firstWhere(
-          (t) => t.name == map['type'],
-          orElse: () => TileType.property,
-        ),
-        name: map['name'] ?? '',
-        price: map['price']?.toDouble(),
-        baseRent: map['baseRent']?.toDouble(),
-        ownerId: map['ownerId'],
-        upgradeLevel: map['upgradeLevel'] ?? 1,
-        customName: map['customName'],
-        isAuction: map['isAuction'] ?? false,
-        side: map['side'] ?? 0,
-      );
+    index: map['index'] ?? 0,
+    type: TileType.values.firstWhere(
+      (t) => t.name == map['type'],
+      orElse: () => TileType.property,
+    ),
+    name: map['name'] ?? '',
+    price: map['price']?.toDouble(),
+    baseRent: map['baseRent']?.toDouble(),
+    ownerId: map['ownerId'],
+    upgradeLevel: map['upgradeLevel'] ?? 1,
+    customName: map['customName'],
+    lane: map['lane'] ?? 0,
+    positionInLane: map['positionInLane'] ?? 0,
+    plotNumber: map['plotNumber'] ?? 'P-000',
+    plotType: PlotType.values.firstWhere(
+      (t) => t.name == map['plotType'],
+      orElse: () => PlotType.residential,
+    ),
+  );
 
   @override
-  List<Object?> get props =>
-      [index, ownerId, upgradeLevel, customName, isAuction];
+  List<Object?> get props => [index, ownerId, upgradeLevel, customName];
 }
 
-// ── Tile Factory ─────────────────────────────────────
+// ── Lane Layout Calculator ───────────────────────────────────────────────────
+class LaneLayout {
+  final int lanes;
+  final int plotsPerLane;
+
+  const LaneLayout({required this.lanes, required this.plotsPerLane});
+
+  static LaneLayout forPlots(int totalPlots) {
+    final int lanes;
+   if (totalPlots <= 20) {
+  lanes = 4;
+} else if (totalPlots <= 40) {
+  lanes = 5;
+} else if (totalPlots <= 60) {
+  lanes = 6;
+} else {
+  lanes = 10;
+}
+    final ppl = (totalPlots / lanes).ceil();
+    return LaneLayout(lanes: lanes, plotsPerLane: ppl);
+  }
+}
+
+// ── Tile Factory ─────────────────────────────────────────────────────────────
 class TileFactory {
-  static List<TileModel> build(int boardSize) {
-    final List<TileModel> tiles = [];
+  static const _resNames = [
+    'Green View', 'Oak Lane', 'Maple Drive', 'Sunrise Blvd', 'Cedar Road',
+    'Palm Avenue', 'Hill Top', 'Pearl Street', 'River Road', 'Blue Hill',
+    'Stone Ave', 'West End', 'Park Street', 'Crown Plaza', 'Empire Ave',
+    'Garden Lane', 'Valley Road', 'Forest Path', 'Star Avenue', 'Moon Street',
+  ];
+  static const _farmNames = [
+    'Harvest Fields', 'Green Acres', 'Sunflower Farm', 'Valley Farm',
+    'Golden Crop', 'Nature\'s Bounty', 'Meadow Fields', 'Rich Soil Farm',
+  ];
+  static const _comNames = [
+    'Business Hub', 'Market Square', 'Trade Centre', 'Commerce Plaza',
+    'Tech Park', 'Retail Square', 'City Mall', 'Enterprise Zone',
+  ];
+  static const _premiumNames = [
+    'Royal Heights', 'Prestige Park', 'Elite Zone', 'Crown Estate',
+    'Diamond Court', 'Platinum Ridge', 'Sovereign Heights', 'Grand Estate',
+  ];
 
-    // Property names pool
-    final names = [
-      'Green View','Oak Street','Maple Drive','Sunset Blvd','Lake View',
-      'Palm Avenue','Hill Top','Lake Zone','Cedar Road','Luxury Zone',
-      'Pearl Street','Market Place','Golden Gate','Dream Villa','School Lane',
-      'Park Street','West End','River Road','Blue Hill','Stone Ave',
-      'Crown Plaza','Diamond St','Empire Ave','Garden Lane','Sunrise Blvd',
-      'Valley Road','Forest Path','Cloud Nine','Star Avenue','Moon Street',
-      'Ocean Drive','Beach Blvd','Harbor View','Cliff Road','Summit Peak',
-      'Alpine Way','Glacier Rd','Desert Rose','Oasis Lane','Dune Street',
-      'Coral Bay','Island Ave','Reef Road','Lagoon Dr','Bay View',
-      'Port Lane','Dock Street','Marina Blvd','Wave Road','Tide Avenue',
-    ];
+  static List<TileModel> build(int totalPlots) {
+    final layout = LaneLayout.forPlots(totalPlots);
+    final tiles = <TileModel>[];
+    int flatIndex = 0;
+    int plotCounter = 0;
 
-    // Price progression
-    double basePrice = 100000;
+    // ── [0] Main Road / Start ──
+    tiles.add(const TileModel(
+      index: 0,
+      type: TileType.start,
+      name: 'MAIN ROAD',
+      lane: 0,
+      positionInLane: 0,
+      plotNumber: 'P-000',
+    ));
+    flatIndex = 1;
 
-    // Side lengths for 25-tile board: 7 bottom, 6 left, 6 top, 6 right
-    // For larger boards we scale proportionally
-  
-    int propIndex = 0;
+    for (int laneNum = 1; laneNum <= layout.lanes; laneNum++) {
+      final isFarmLane    = laneNum % 3 == 0;
+      final isCommercial  = laneNum % 4 == 0;
+      final isHighway     = laneNum == 1;
 
-    for (int i = 0; i < boardSize; i++) {
-      final side = _getSide(i, boardSize);
-      final double price = basePrice + (propIndex * 10000);
-      final double rent = price * 0.10;
+      // ── Plot tiles ──
+      for (int pos = 0; pos < layout.plotsPerLane; pos++) {
+        if (plotCounter >= totalPlots) break;
+        plotCounter++;
 
-      TileType type;
-      String name;
+        final plotNum  = 'P-${plotCounter.toString().padLeft(3, '0')}';
+        final plotType = _assignType(laneNum, pos, layout.plotsPerLane,
+            isFarmLane, isCommercial, isHighway, plotCounter);
+        final basePrice = _priceFor(plotType, plotCounter);
+        final tileType  = (isFarmLane && pos % 3 == 1)
+            ? TileType.farmZone
+            : TileType.property;
 
-      if (i == 0) {
-        type = TileType.start;
-        name = 'GO';
-      } else if (i == boardSize ~/ 4) {
-        type = TileType.bank;
-        name = 'BANK';
-      } else if (i == boardSize ~/ 2) {
-        type = TileType.tax;
-        name = 'CITY TAX';
-      } else if (i == (boardSize * 3) ~/ 4) {
-        type = TileType.luckyWheel;
-        name = 'LUCKY\nWHEEL';
-      } else if (i % 7 == 3) {
-        type = TileType.surprise;
-        name = 'SURPRISE';
-      } else {
-        type = TileType.property;
-        name = names[propIndex % names.length];
-        propIndex++;
+        tiles.add(TileModel(
+          index: flatIndex++,
+          type: tileType,
+          name: _nameFor(plotType, plotCounter),
+          price: basePrice,
+          baseRent: basePrice * 0.10,
+          lane: laneNum,
+          positionInLane: pos,
+          plotNumber: plotNum,
+          plotType: plotType,
+        ));
       }
 
+      // ── Special tile at end of each lane ──
+      final special = _specialForLane(laneNum);
       tiles.add(TileModel(
-        index: i,
-        type: type,
-        name: name,
-        price: type == TileType.property ? price : null,
-        baseRent: type == TileType.property ? rent : null,
-        side: side,
+        index: flatIndex++,
+        type: special,
+        name: _specialName(special),
+        lane: laneNum,
+        positionInLane: layout.plotsPerLane,
+        plotNumber: 'S-${laneNum.toString().padLeft(2, '0')}',
       ));
     }
 
     return tiles;
   }
 
-  static int _getSide(int index, int boardSize) {
-    final perSide = boardSize / 4;
-    if (index < perSide) return 0;         // bottom
-    if (index < perSide * 2) return 1;    // left
-    if (index < perSide * 3) return 2;    // top
-    return 3;                              // right
+  static PlotType _assignType(int lane, int pos, int ppl,
+      bool isFarm, bool isCommercial, bool isHighway, int plotNum) {
+    // First/last plot in lane = corner
+    if (pos == 0 || pos == ppl - 1) return PlotType.corner;
+    if (isFarm)       return PlotType.farm;
+    if (isCommercial) return PlotType.commercial;
+    if (isHighway)    return PlotType.highwayFacing;
+    if (pos % 7 == 6) return PlotType.luxury;
+    if (pos % 6 == 5) return PlotType.premium;
+    if (pos % 5 == 4) return PlotType.lakeView;
+    if (pos % 4 == 3) return PlotType.garden;
+    return PlotType.residential;
   }
+
+  static double _priceFor(PlotType type, int counter) {
+    final base = 80000.0 + counter * 7500.0;
+    switch (type) {
+      case PlotType.luxury:        return base * 3.0;
+      case PlotType.premium:       return base * 2.5;
+      case PlotType.lakeView:      return base * 2.2;
+      case PlotType.commercial:    return base * 2.0;
+      case PlotType.highwayFacing: return base * 1.8;
+      case PlotType.corner:        return base * 1.5;
+      case PlotType.industrial:    return base * 1.4;
+      case PlotType.garden:        return base * 1.3;
+      case PlotType.farm:          return base * 0.8;
+      case PlotType.residential:   return base;
+    }
+  }
+
+  static String _nameFor(PlotType type, int counter) {
+  final i = counter - 1;
+
+  switch (type) {
+    case PlotType.farm:
+      return _farmNames[i % _farmNames.length];
+
+    case PlotType.commercial:
+      return _comNames[i % _comNames.length];
+
+    case PlotType.premium:
+    case PlotType.luxury:
+      return _premiumNames[i % _premiumNames.length];
+
+    default:
+      return _resNames[i % _resNames.length];
+  }
+}
+
+  static TileType _specialForLane(int lane) {
+    switch (lane % 3) {
+      case 1: return TileType.surprise;
+      case 2: return TileType.bank;
+      default: return TileType.tax;
+    }
+  }
+
+  static String _specialName(TileType type) {
+    switch (type) {
+      case TileType.surprise: return 'SURPRISE';
+      case TileType.bank:     return 'BANK';
+      case TileType.tax:      return 'CITY TAX';
+      default:                return 'SPECIAL';
+    }
+  }
+
+  // Kept for backward compat (setup_game_screen calls TileFactory.build)
+}
+
+// Alias kept so setup_game_screen.dart compile doesn't break
+class TileBuilder {
+  static List<TileModel> buildTiles(int n) => TileFactory.build(n);
 }
