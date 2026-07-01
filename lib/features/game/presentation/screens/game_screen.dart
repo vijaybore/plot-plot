@@ -77,6 +77,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             child: PlayerPanelWidget(
               players: gs.players,
               currentPlayerIndex: gs.currentPlayerIndex,
+              gs: gs,
             ),
           ),
           const SizedBox(height: 4),
