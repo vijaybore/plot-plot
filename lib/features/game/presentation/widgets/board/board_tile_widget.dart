@@ -3,109 +3,186 @@ import '../../../../../core/theme/app_theme.dart';
 import '../../../../../features/game/domain/models/tile_model.dart';
 import '../../../../../features/game/domain/models/player_model.dart';
 
-class PlotTileCard extends StatelessWidget {
+class PlotTileCard extends StatefulWidget {
   final TileModel tile;
-  final List<PlayerModel> players;
+  final List<PlayerModel> players;   // players currently ON this tile
+  final List<PlayerModel> allPlayers; // all players (for owner color lookup)
   final double width;
   final double height;
+  final bool isHighlighted; // for movement animation
 
   const PlotTileCard({
     super.key,
     required this.tile,
     required this.players,
-    this.width = 72,
-    this.height = 88,
+    this.allPlayers = const [],
+    this.width = 110,
+    this.height = 130,
+    this.isHighlighted = false,
   });
 
   @override
+  State<PlotTileCard> createState() => _PlotTileCardState();
+}
+
+class _PlotTileCardState extends State<PlotTileCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _glow;
+  late Animation<double> _glowAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _glow = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600))
+      ..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.3, end: 1.0).animate(
+        CurvedAnimation(parent: _glow, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _glow.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      margin: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 2),
-      decoration: BoxDecoration(
-        color: _bgColor(),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99),
-          width: tile.isOwned ? 2 : 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 3, offset: const Offset(0, 1),
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (_, _) => Container(
+        width: widget.width,
+        height: widget.height,
+        margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+        decoration: BoxDecoration(
+          color: _bgColor(),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: widget.isHighlighted
+                ? AppColors.accent.withValues(alpha: _glowAnim.value)
+                : (widget.tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99)),
+            width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
           ),
-          if (tile.isOwned)
+          boxShadow: [
             BoxShadow(
-              color: _ownerColor().withValues(alpha: 0.3),
-              blurRadius: 6, spreadRadius: 0,
+              color: widget.isHighlighted
+                  ? AppColors.accent.withValues(alpha: 0.5 * _glowAnim.value)
+                  : (widget.tile.isOwned
+                      ? _ownerColor().withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.08)),
+              blurRadius: widget.isHighlighted ? 12 : 4,
+              spreadRadius: widget.isHighlighted ? 2 : 0,
             ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(5),
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            _ownerStrip(),
-            Expanded(child: _body()),
-            if (players.isNotEmpty) _playerDots(),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: Column(
+            children: [
+              _topStrip(),
+              Expanded(child: _body()),
+              if (widget.players.isNotEmpty) _playerTokens(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _ownerStrip() => Container(
-    height: 5,
-    color: tile.isOwned
-        ? _ownerColor()
-        : tile.plotTypeColor.withValues(alpha: 0.7),
+  // ── Top colour strip (owner colour or plot-type colour) ──────────
+  Widget _topStrip() => Container(
+    height: 6,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(colors: [
+        widget.tile.isOwned
+            ? _ownerColor()
+            : widget.tile.plotTypeColor.withValues(alpha: 0.8),
+        widget.tile.isOwned
+            ? _ownerColor().withValues(alpha: 0.6)
+            : widget.tile.plotTypeColor.withValues(alpha: 0.4),
+      ]),
+    ),
   );
 
+  // ── Body ─────────────────────────────────────────────────────────
   Widget _body() {
-    if (tile.type == TileType.start) return _startBody();
-    if (!tile.isPurchasable) return _specialBody();
+    if (widget.tile.type == TileType.start) return _startBody();
+    if (!widget.tile.isPurchasable && !widget.tile.isOwned) {
+      return _specialBody();
+    }
     return _plotBody();
   }
 
   Widget _plotBody() {
+    final t = widget.tile;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(3, 3, 3, 2),
+      padding: const EdgeInsets.fromLTRB(5, 4, 5, 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Row 1: plot number + type badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(tile.plotNumber,
+              Text(
+                t.plotNumber,
                 style: const TextStyle(
-                  color: Color(0xFF555555), fontSize: 6,
-                  fontWeight: FontWeight.w700, letterSpacing: 0.2,
-                )),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0.5),
-                decoration: BoxDecoration(
-                  color: tile.plotTypeColor,
-                  borderRadius: BorderRadius.circular(2),
+                  color: Color(0xFF555555),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
                 ),
-                child: Text(tile.plotTypeLabel,
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                decoration: BoxDecoration(
+                  color: t.plotTypeColor,
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(
+                      color: t.plotTypeColor.withValues(alpha: 0.6), width: 0.5),
+                ),
+                child: Text(
+                  t.plotTypeLabel,
                   style: const TextStyle(
-                    color: Color(0xFF333333), fontSize: 5, fontWeight: FontWeight.w800,
-                  )),
+                    color: Color(0xFF333333),
+                    fontSize: 6.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
               ),
             ],
           ),
-          const Spacer(),
-          Center(child: Text(tile.upgradeEmoji, style: const TextStyle(fontSize: 14))),
-          const SizedBox(height: 2),
+
+          const SizedBox(height: 4),
+
+          // Row 2: big emoji / building image
+          Expanded(
+            child: Center(
+              child: Text(
+                t.isOwned ? t.displayEmoji : _unownedEmoji(),
+                style: TextStyle(
+                  fontSize: t.isOwned ? 28 : 22,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 3),
+
+          // Row 3: name (hidden until bought)
           Center(
             child: Text(
-              tile.displayName,
+              t.isOwned ? t.displayName : 'Empty Plot',
               style: TextStyle(
-                color: tile.isOwned ? const Color(0xFF1A1A2E) : const Color(0xFF333333),
-                fontSize: 6.5,
-                fontWeight: tile.isOwned ? FontWeight.w800 : FontWeight.w600,
+                color: t.isOwned
+                    ? const Color(0xFF1A1A2E)
+                    : const Color(0xFF888888),
+                fontSize: 8,
+                fontWeight:
+                    t.isOwned ? FontWeight.w800 : FontWeight.w500,
+                fontStyle:
+                    t.isOwned ? FontStyle.normal : FontStyle.italic,
                 height: 1.2,
               ),
               textAlign: TextAlign.center,
@@ -113,27 +190,44 @@ class PlotTileCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 1),
-          if (tile.price != null)
+
+          const SizedBox(height: 2),
+
+          // Row 4: price or dev level
+          if (t.isOwned)
             Center(
-              child: Text(_fmt(tile.price!),
-                style: TextStyle(
-                  color: tile.isOwned ? Colors.black54 : const Color(0xFF1565C0),
-                  fontSize: 6, fontWeight: FontWeight.w700,
-                )),
-            ),
-          if (tile.upgradeLevel > 1) ...[
-            const SizedBox(height: 1),
-            Center(
-              child: Text(tile.upgradeName,
-                style: const TextStyle(
-                  color: Color(0xFF2E7D32), fontSize: 5.5, fontWeight: FontWeight.w700,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(3),
                 ),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
+                child: Text(
+                  t.upgradeLevel > 1 ? t.upgradeName : 'Owned',
+                  style: const TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontSize: 6.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+          else
+            Center(
+              child: Text(
+                '— Available —',
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 6.5,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
-          ],
-          const SizedBox(height: 2),
+
+          const SizedBox(height: 3),
         ],
       ),
     );
@@ -142,11 +236,11 @@ class PlotTileCard extends StatelessWidget {
   Widget _specialBody() {
     Color color;
     String emoji, label;
-    switch (tile.type) {
+    switch (widget.tile.type) {
       case TileType.surprise:
         emoji = '🎁'; label = 'SURPRISE'; color = const Color(0xFFFF9800);
       case TileType.luckyWheel:
-        emoji = '🎡'; label = 'LUCKY'; color = const Color(0xFFFFD700);
+        emoji = '🎡'; label = 'LUCKY SPIN'; color = const Color(0xFFFFD700);
       case TileType.tax:
         emoji = '💰'; label = 'CITY TAX'; color = const Color(0xFFE74C3C);
       case TileType.bank:
@@ -157,13 +251,15 @@ class PlotTileCard extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 16)),
-        const SizedBox(height: 2),
+        Text(emoji, style: const TextStyle(fontSize: 26)),
+        const SizedBox(height: 4),
         Text(label,
-          style: TextStyle(color: color, fontSize: 6,
-              fontWeight: FontWeight.w900, letterSpacing: 0.3),
-          textAlign: TextAlign.center,
-        ),
+            style: TextStyle(
+                color: color,
+                fontSize: 7.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5),
+            textAlign: TextAlign.center),
       ],
     );
   }
@@ -171,63 +267,93 @@ class PlotTileCard extends StatelessWidget {
   Widget _startBody() => const Column(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      Text('🏘️', style: TextStyle(fontSize: 16)),
-      SizedBox(height: 2),
+      Text('🏘️', style: TextStyle(fontSize: 26)),
+      SizedBox(height: 4),
       Text('GO',
-        style: TextStyle(color: Color(0xFF00D4AA),
-            fontSize: 7, fontWeight: FontWeight.w900)),
+          style: TextStyle(
+              color: Color(0xFF00D4AA),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1)),
     ],
   );
 
-  Widget _playerDots() => Container(
-    height: 10,
-    padding: const EdgeInsets.symmetric(horizontal: 2),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: players.take(4).map((p) => Container(
-        width: 8, height: 8,
-        margin: const EdgeInsets.symmetric(horizontal: 0.5),
-        decoration: BoxDecoration(
-          color: p.color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 0.8),
-          boxShadow: [BoxShadow(color: p.color.withValues(alpha: 0.6), blurRadius: 2)],
-        ),
-        child: Center(
-          child: Text('${p.colorIndex + 1}',
-            style: const TextStyle(color: Colors.white,
-                fontSize: 4, fontWeight: FontWeight.bold)),
-        ),
-      )).toList(),
-    ),
-  );
+  // ── Player letter tokens at bottom ───────────────────────────────
+  Widget _playerTokens() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5, left: 3, right: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: widget.players.take(4).map((p) => Container(
+          width: 20,
+          height: 20,
+          margin: const EdgeInsets.symmetric(horizontal: 1.5),
+          decoration: BoxDecoration(
+            color: p.color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: p.color.withValues(alpha: 0.6),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              p.displayName.substring(0, 1).toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  String _unownedEmoji() {
+    switch (widget.tile.plotType) {
+      case PlotType.farm:          return '🌾';
+      case PlotType.commercial:    return '🏪';
+      case PlotType.industrial:    return '🏗️';
+      case PlotType.lakeView:      return '🌊';
+      case PlotType.luxury:        return '🏰';
+      case PlotType.premium:       return '🌟';
+      case PlotType.garden:        return '🌳';
+      case PlotType.highwayFacing: return '🛣️';
+      case PlotType.corner:        return '📐';
+      default:                     return '🏡';
+    }
+  }
 
   Color _bgColor() {
-    if (tile.type == TileType.start)      return const Color(0xFF1A1A2E);
-    if (tile.type == TileType.surprise)   return const Color(0xFFFFF3E0);
-    if (tile.type == TileType.luckyWheel) return const Color(0xFFFFFDE7);
-    if (tile.type == TileType.tax)        return const Color(0xFFFFEBEE);
-    if (tile.type == TileType.bank)       return const Color(0xFFE3F2FD);
-    if (tile.isOwned) return tile.plotTypeColor.withValues(alpha: 0.9);
-    return tile.plotTypeColor.withValues(alpha: 0.35);
+    if (widget.tile.type == TileType.start)      return const Color(0xFF1A1A2E);
+    if (widget.tile.type == TileType.surprise)   return const Color(0xFFFFF3E0);
+    if (widget.tile.type == TileType.luckyWheel) return const Color(0xFFFFFDE7);
+    if (widget.tile.type == TileType.tax)        return const Color(0xFFFFEBEE);
+    if (widget.tile.type == TileType.bank)       return const Color(0xFFE3F2FD);
+    if (widget.tile.isOwned) {
+      return widget.tile.plotTypeColor.withValues(alpha: 0.88);
+    }
+    return widget.tile.plotTypeColor.withValues(alpha: 0.28);
   }
 
   Color _ownerColor() {
-    if (!tile.isOwned) return AppColors.boardBorder;
-    final owner = players.where((p) => p.id == tile.ownerId).firstOrNull;
+    final owner = widget.allPlayers
+        .where((p) => p.id == widget.tile.ownerId)
+        .firstOrNull;
     if (owner != null) return owner.color;
-    final idx = (tile.ownerId?.hashCode ?? 0).abs() % AppColors.playerColors.length;
+    final idx = (widget.tile.ownerId?.hashCode ?? 0).abs() %
+        AppColors.playerColors.length;
     return AppColors.playerColors[idx];
-  }
-
-  String _fmt(double v) {
-    if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(1)}Cr';
-    if (v >= 100000)   return '₹${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000)     return '₹${(v / 1000).toStringAsFixed(0)}K';
-    return '₹${v.toStringAsFixed(0)}';
   }
 }
 
-// Legacy aliases so any other imports don't immediately break
+// Legacy alias
 typedef BoardTileWidget = PlotTileCard;
 enum TileDirection { top, bottom, left, right }

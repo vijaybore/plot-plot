@@ -7,6 +7,7 @@ import '../../../../features/game/domain/models/player_model.dart';
 import '../../../../features/game/domain/models/tile_model.dart';
 import '../../../../features/game/domain/models/game_state_model.dart';
 import 'game_screen.dart';
+import '../providers/game_provider.dart';
 
 class SetupGameScreen extends ConsumerStatefulWidget {
   final bool isOnline;
@@ -74,14 +75,14 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       isOnline: widget.isOnline,
       phase: GamePhase.playing,
     );
+ref.read(gameProvider.notifier).initGame(gameState);
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GameScreen(initialState: gameState),
-      ),
-    );
-  }
-
+Navigator.of(context).push(
+  MaterialPageRoute(
+    builder: (_) => const GameScreen(),
+  ),
+);
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(

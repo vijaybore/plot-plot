@@ -14,6 +14,7 @@ class PlayerModel extends Equatable {
   final List<String> ownedPropertyIds;
   final List<FarmModel> farms;
   final List<BusinessModel> businesses;
+  final double bankBalance;
   final double loanAmount;
   final bool hasShield;
   final bool skipNextTurn;
@@ -32,6 +33,7 @@ class PlayerModel extends Equatable {
     this.ownedPropertyIds = const [],
     this.farms = const [],
     this.businesses = const [],
+    this.bankBalance = 0,
     this.loanAmount = 0,
     this.hasShield = false,
     this.skipNextTurn = false,
@@ -45,7 +47,7 @@ class PlayerModel extends Equatable {
   Color get color => AppColors.playerColors[colorIndex % 7];
 
   double get netWorth {
-    double total = money - loanAmount;
+    double total = money + bankBalance - loanAmount;
     for (final farm in farms) {
       total += farm.value;
     }
@@ -64,6 +66,7 @@ class PlayerModel extends Equatable {
     List<String>? ownedPropertyIds,
     List<FarmModel>? farms,
     List<BusinessModel>? businesses,
+    double? bankBalance,
     double? loanAmount,
     bool? hasShield,
     bool? skipNextTurn,
@@ -82,6 +85,7 @@ class PlayerModel extends Equatable {
       ownedPropertyIds: ownedPropertyIds ?? this.ownedPropertyIds,
       farms: farms ?? this.farms,
       businesses: businesses ?? this.businesses,
+      bankBalance: bankBalance ?? this.bankBalance,
       loanAmount: loanAmount ?? this.loanAmount,
       hasShield: hasShield ?? this.hasShield,
       skipNextTurn: skipNextTurn ?? this.skipNextTurn,
@@ -102,7 +106,8 @@ class PlayerModel extends Equatable {
         'ownedPropertyIds': ownedPropertyIds,
         'farms': farms.map((f) => f.toMap()).toList(),
         'businesses': businesses.map((b) => b.toMap()).toList(),
-        'loanAmount': loanAmount,
+        'bankBalance':bankBalance,
+        'loanAmount':loanAmount,
         'hasShield': hasShield,
         'skipNextTurn': skipNextTurn,
         'isOnline': isOnline,
@@ -117,6 +122,8 @@ class PlayerModel extends Equatable {
         displayName: map['displayName'] ?? '',
         photoUrl: map['photoUrl'],
         money: (map['money'] ?? 0).toDouble(),
+        bankBalance: (map['bankBalance'] ?? 0).toDouble(),
+        loanAmount: (map['loanAmount'] ?? 0).toDouble(),
         position: map['position'] ?? 0,
         ownedPropertyIds: List<String>.from(map['ownedPropertyIds'] ?? []),
         farms: (map['farms'] as List<dynamic>?)
@@ -124,10 +131,9 @@ class PlayerModel extends Equatable {
                 .toList() ??
             [],
         businesses: (map['businesses'] as List<dynamic>?)
-                ?.map((b) => BusinessModel.fromMap(b))
-                .toList() ??
-            [],
-        loanAmount: (map['loanAmount'] ?? 0).toDouble(),
+        ?.map((b) => BusinessModel.fromMap(b))
+        .toList() ??
+    [],
         hasShield: map['hasShield'] ?? false,
         skipNextTurn: map['skipNextTurn'] ?? false,
         isOnline: map['isOnline'] ?? true,
@@ -141,17 +147,18 @@ class PlayerModel extends Equatable {
       );
 
   @override
-  List<Object?> get props => [
-        id,
-        money,
-        position,
-        ownedPropertyIds,
-        loanAmount,
-        hasShield,
-        skipNextTurn,
-        isBankrupt,
-        rank,
-      ];
+ List<Object?> get props => [
+  id,
+  money,
+  bankBalance,
+  position,
+  ownedPropertyIds,
+  loanAmount,
+  hasShield,
+  skipNextTurn,
+  isBankrupt,
+  rank,
+];
 }
 
 // ── Farm Model ──────────────────────────────────────

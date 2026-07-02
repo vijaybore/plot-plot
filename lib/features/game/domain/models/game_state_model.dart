@@ -31,12 +31,15 @@ class GameStateModel extends Equatable {
   final int finalRoundsCurrent;
   final String? eventMessage;
   final bool isOnline;
+  final List<String> activityLog;
   final String? adminId;
   final int? lastDiceValue;
+  final bool isMoving;
 
   const GameStateModel({
     required this.gameId,
     required this.players,
+    
     required this.tiles,
     this.currentPlayerIndex = 0,
     this.phase = GamePhase.waiting,
@@ -48,6 +51,8 @@ class GameStateModel extends Equatable {
     this.isOnline = false,
     this.adminId,
     this.lastDiceValue,
+    this.isMoving = false,
+    this.activityLog = const [],
   });
 
   PlayerModel get currentPlayer => players[currentPlayerIndex];
@@ -77,6 +82,7 @@ class GameStateModel extends Equatable {
   GameStateModel copyWith({
     String? gameId,
     List<PlayerModel>? players,
+    List<String>? activityLog,
     List<TileModel>? tiles,
     int? currentPlayerIndex,
     GamePhase? phase,
@@ -89,11 +95,13 @@ class GameStateModel extends Equatable {
     String? adminId,
     int? lastDiceValue,
     bool clearEventMessage = false,
+    bool? isMoving,
   }) {
     return GameStateModel(
       gameId: gameId ?? this.gameId,
       players: players ?? this.players,
       tiles: tiles ?? this.tiles,
+      activityLog: activityLog ?? this.activityLog,
       currentPlayerIndex: currentPlayerIndex ?? this.currentPlayerIndex,
       phase: phase ?? this.phase,
       lastEvent: lastEvent ?? this.lastEvent,
@@ -104,6 +112,8 @@ class GameStateModel extends Equatable {
       isOnline: isOnline ?? this.isOnline,
       adminId: adminId ?? this.adminId,
       lastDiceValue: lastDiceValue ?? this.lastDiceValue,
+      isMoving: isMoving ?? this.isMoving,
+      
     );
   }
 
@@ -111,10 +121,12 @@ class GameStateModel extends Equatable {
   List<Object?> get props => [
         gameId,
         players,
+        activityLog,
         tiles,
         currentPlayerIndex,
         phase,
         lastEvent,
         finalRoundsCurrent,
+        isMoving,
       ];
 }
