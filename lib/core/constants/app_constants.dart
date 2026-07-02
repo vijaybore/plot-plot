@@ -13,13 +13,17 @@ class AppConstants {
   static const int maxDiceValue = 6;
 
   // Economy
+  // Fixed plot prices range ₹8L (farm) → ₹40L (luxury), avg ≈ ₹17L on a
+  // 25-plot board. Starting cash is set so each player can buy 2-3 plots
+  // right away and then grow via GO salary, rent, and farm income across
+  // the game — nobody is meant to buy the whole board on turn one.
   static const Map<int, double> startingMoneyByPlayers = {
-    2: 2000000,
-    3: 1800000,
-    4: 1600000,
-    5: 1400000,
-    6: 1200000,
-    7: 1000000,
+    2: 4000000,
+    3: 3600000,
+    4: 3200000,
+    5: 2800000,
+    6: 2400000,
+    7: 2000000,
   };
 
   static const Map<int, double> salaryByBoardSize = {
@@ -64,7 +68,10 @@ class AppConstants {
     3: 2.0,
   };
 
-  static const List<int> endRoundOptions = [3, 5, 10];
+  // Total rounds the whole game lasts (every player gets this many turns).
+  // The game ends here regardless of whether every plot got sold —
+  // winner is whoever has the highest net worth at that point.
+  static const List<int> endRoundOptions = [10, 15, 25];
 
   static const int roomCodeLength = 6;
 

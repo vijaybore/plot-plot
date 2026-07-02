@@ -308,45 +308,28 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     final isRoundEnd = gs.currentPlayerIndex == gs.players.length - 1;
     List<TileModel> tiles = gs.tiles;
     List<String> log = List.from(gs.activityLog);
+    int roundsPlayed = gs.roundsPlayed;
+
     if (isRoundEnd) {
       tiles = _applyAppreciation(tiles);
       _applyFarmIncome(gs, log);
-      log.add('📈 Round complete — properties appreciated!');
-    }
+      roundsPlayed += 1;
+      log.add('📈 Round $roundsPlayed complete — properties appreciated!');
 
-    if (gs.allPropertiesOwned && gs.phase == GamePhase.playing) {
-      log.add('🏁 All plots owned! Final rounds begin!');
-      state = gs.copyWith(
-        tiles: tiles,
-        activityLog: log,
-        phase: GamePhase.finalRound,
-        currentPlayerIndex: gs.nextPlayerIndex,
-        eventMessage: '🏁 All plots owned! Final rounds begin!',
-        lastEvent: GameEvent.none,
-      );
-      return;
-    }
-
-    if (gs.phase == GamePhase.finalRound) {
-      if (gs.currentPlayerIndex == gs.players.length - 1) {
-        final newRound = gs.finalRoundsCurrent + 1;
-        if (newRound >= gs.finalRoundsTotal) {
-          log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
-          state = gs.copyWith(
-            tiles: tiles,
-            activityLog: log,
-            phase: GamePhase.ended,
-            lastEvent: GameEvent.gameEnded,
-            eventMessage: '🏆 Game Over!',
-          );
-          return;
-        }
+      // Game ends once the agreed number of rounds is reached — win goes to
+      // the highest net worth. This doesn't require every plot to be sold;
+      // with only 2 players and real plot prices that could take forever.
+      // Selling out early is still allowed and simply means more rent income
+      // for whoever bought, not an instant end.
+      if (roundsPlayed >= gs.finalRoundsTotal) {
+        log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
         state = gs.copyWith(
           tiles: tiles,
           activityLog: log,
-          finalRoundsCurrent: newRound,
-          currentPlayerIndex: gs.nextPlayerIndex,
-          lastEvent: GameEvent.none,
+          roundsPlayed: roundsPlayed,
+          phase: GamePhase.ended,
+          lastEvent: GameEvent.gameEnded,
+          eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
         );
         return;
       }
@@ -355,6 +338,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     state = gs.copyWith(
       tiles: tiles,
       activityLog: log,
+      roundsPlayed: roundsPlayed,
       currentPlayerIndex: gs.nextPlayerIndex,
       lastEvent: GameEvent.none,
       eventMessage: null,

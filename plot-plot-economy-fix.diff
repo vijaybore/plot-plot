@@ -1,0 +1,361 @@
+diff --git a/lib/core/constants/app_constants.dart b/lib/core/constants/app_constants.dart
+index 001d404..0832697 100644
+--- a/lib/core/constants/app_constants.dart
++++ b/lib/core/constants/app_constants.dart
+@@ -13,13 +13,17 @@ class AppConstants {
+   static const int maxDiceValue = 6;
+ 
+   // Economy
++  // Fixed plot prices range ₹8L (farm) → ₹40L (luxury), avg ≈ ₹17L on a
++  // 25-plot board. Starting cash is set so each player can buy 2-3 plots
++  // right away and then grow via GO salary, rent, and farm income across
++  // the game — nobody is meant to buy the whole board on turn one.
+   static const Map<int, double> startingMoneyByPlayers = {
+-    2: 2000000,
+-    3: 1800000,
+-    4: 1600000,
+-    5: 1400000,
+-    6: 1200000,
+-    7: 1000000,
++    2: 4000000,
++    3: 3600000,
++    4: 3200000,
++    5: 2800000,
++    6: 2400000,
++    7: 2000000,
+   };
+ 
+   static const Map<int, double> salaryByBoardSize = {
+@@ -64,7 +68,10 @@ class AppConstants {
+     3: 2.0,
+   };
+ 
+-  static const List<int> endRoundOptions = [3, 5, 10];
++  // Total rounds the whole game lasts (every player gets this many turns).
++  // The game ends here regardless of whether every plot got sold —
++  // winner is whoever has the highest net worth at that point.
++  static const List<int> endRoundOptions = [10, 15, 25];
+ 
+   static const int roomCodeLength = 6;
+ 
+diff --git a/lib/features/game/domain/models/game_state_model.dart b/lib/features/game/domain/models/game_state_model.dart
+index d1cf518..4cb492a 100644
+--- a/lib/features/game/domain/models/game_state_model.dart
++++ b/lib/features/game/domain/models/game_state_model.dart
+@@ -29,6 +29,7 @@ class GameStateModel extends Equatable {
+   final int boardSize;
+   final int finalRoundsTotal;
+   final int finalRoundsCurrent;
++  final int roundsPlayed;
+   final String? eventMessage;
+   final bool isOnline;
+   final List<String> activityLog;
+@@ -47,6 +48,7 @@ class GameStateModel extends Equatable {
+     required this.boardSize,
+     this.finalRoundsTotal = 5,
+     this.finalRoundsCurrent = 0,
++    this.roundsPlayed = 0,
+     this.eventMessage,
+     this.isOnline = false,
+     this.adminId,
+@@ -90,6 +92,7 @@ class GameStateModel extends Equatable {
+     int? boardSize,
+     int? finalRoundsTotal,
+     int? finalRoundsCurrent,
++    int? roundsPlayed,
+     String? eventMessage,
+     bool? isOnline,
+     String? adminId,
+@@ -108,6 +111,7 @@ class GameStateModel extends Equatable {
+       boardSize: boardSize ?? this.boardSize,
+       finalRoundsTotal: finalRoundsTotal ?? this.finalRoundsTotal,
+       finalRoundsCurrent: finalRoundsCurrent ?? this.finalRoundsCurrent,
++      roundsPlayed: roundsPlayed ?? this.roundsPlayed,
+       eventMessage: clearEventMessage ? null : (eventMessage ?? this.eventMessage),
+       isOnline: isOnline ?? this.isOnline,
+       adminId: adminId ?? this.adminId,
+diff --git a/lib/features/game/domain/models/tile_model.dart b/lib/features/game/domain/models/tile_model.dart
+index 27ac94b..8e3375f 100644
+--- a/lib/features/game/domain/models/tile_model.dart
++++ b/lib/features/game/domain/models/tile_model.dart
+@@ -132,7 +132,7 @@ class TileModel extends Equatable {
+     }
+   }
+ 
+-  // ── Suggested price range ────────────────────────────────────────
++  // ── Suggested price range (kept for reference / legacy boards) ───
+   static (double min, double max) priceRange(PlotType type) {
+     switch (type) {
+       case PlotType.farm:         return (300000, 1500000);
+@@ -148,6 +148,25 @@ class TileModel extends Equatable {
+     }
+   }
+ 
++  // ── Fixed listing price ──────────────────────────────────────────
++  // Every plot has one non-negotiable bank-set price based on its type.
++  // No more "player types in any number" — the board is a real price list,
++  // like Ludo squares are fixed positions with fixed rules.
++  static double fixedPrice(PlotType type) {
++    switch (type) {
++      case PlotType.farm:         return 800000;   // 8L  — cheapest, income plot
++      case PlotType.residential:  return 1200000;  // 12L
++      case PlotType.garden:       return 1500000;  // 15L
++      case PlotType.corner:       return 1800000;  // 18L — corner premium
++      case PlotType.industrial:   return 2000000;  // 20L
++      case PlotType.highwayFacing:return 2000000;  // 20L
++      case PlotType.commercial:   return 2500000;  // 25L
++      case PlotType.lakeView:     return 2800000;  // 28L
++      case PlotType.premium:      return 3200000;  // 32L
++      case PlotType.luxury:       return 4000000;  // 40L
++    }
++  }
++
+   // ── Plot type colors & labels ────────────────────────────────────
+   Color get plotTypeColor {
+     switch (plotType) {
+@@ -325,7 +344,9 @@ class TileFactory {
+         tiles.add(TileModel(
+           index: flatIndex++,
+           type: tileType,
+-          // price intentionally null — player sets on purchase
++          // price is fixed by the bank at creation — same price for every
++          // player, every game. Only the owner's chosen name/emoji is custom.
++          price: TileModel.fixedPrice(plotType),
+           name: _nameFor(plotType, plotCounter),
+           lane: laneNum,
+           positionInLane: pos,
+diff --git a/lib/features/game/presentation/providers/game_provider.dart b/lib/features/game/presentation/providers/game_provider.dart
+index 28f04da..6bdde16 100644
+--- a/lib/features/game/presentation/providers/game_provider.dart
++++ b/lib/features/game/presentation/providers/game_provider.dart
+@@ -308,45 +308,28 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
+     final isRoundEnd = gs.currentPlayerIndex == gs.players.length - 1;
+     List<TileModel> tiles = gs.tiles;
+     List<String> log = List.from(gs.activityLog);
++    int roundsPlayed = gs.roundsPlayed;
++
+     if (isRoundEnd) {
+       tiles = _applyAppreciation(tiles);
+       _applyFarmIncome(gs, log);
+-      log.add('📈 Round complete — properties appreciated!');
+-    }
+-
+-    if (gs.allPropertiesOwned && gs.phase == GamePhase.playing) {
+-      log.add('🏁 All plots owned! Final rounds begin!');
+-      state = gs.copyWith(
+-        tiles: tiles,
+-        activityLog: log,
+-        phase: GamePhase.finalRound,
+-        currentPlayerIndex: gs.nextPlayerIndex,
+-        eventMessage: '🏁 All plots owned! Final rounds begin!',
+-        lastEvent: GameEvent.none,
+-      );
+-      return;
+-    }
+-
+-    if (gs.phase == GamePhase.finalRound) {
+-      if (gs.currentPlayerIndex == gs.players.length - 1) {
+-        final newRound = gs.finalRoundsCurrent + 1;
+-        if (newRound >= gs.finalRoundsTotal) {
+-          log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
+-          state = gs.copyWith(
+-            tiles: tiles,
+-            activityLog: log,
+-            phase: GamePhase.ended,
+-            lastEvent: GameEvent.gameEnded,
+-            eventMessage: '🏆 Game Over!',
+-          );
+-          return;
+-        }
++      roundsPlayed += 1;
++      log.add('📈 Round $roundsPlayed complete — properties appreciated!');
++
++      // Game ends once the agreed number of rounds is reached — win goes to
++      // the highest net worth. This doesn't require every plot to be sold;
++      // with only 2 players and real plot prices that could take forever.
++      // Selling out early is still allowed and simply means more rent income
++      // for whoever bought, not an instant end.
++      if (roundsPlayed >= gs.finalRoundsTotal) {
++        log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
+         state = gs.copyWith(
+           tiles: tiles,
+           activityLog: log,
+-          finalRoundsCurrent: newRound,
+-          currentPlayerIndex: gs.nextPlayerIndex,
+-          lastEvent: GameEvent.none,
++          roundsPlayed: roundsPlayed,
++          phase: GamePhase.ended,
++          lastEvent: GameEvent.gameEnded,
++          eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
+         );
+         return;
+       }
+@@ -355,6 +338,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
+     state = gs.copyWith(
+       tiles: tiles,
+       activityLog: log,
++      roundsPlayed: roundsPlayed,
+       currentPlayerIndex: gs.nextPlayerIndex,
+       lastEvent: GameEvent.none,
+       eventMessage: null,
+diff --git a/lib/features/game/presentation/screens/game_screen.dart b/lib/features/game/presentation/screens/game_screen.dart
+index eac1f21..7d26d0c 100644
+--- a/lib/features/game/presentation/screens/game_screen.dart
++++ b/lib/features/game/presentation/screens/game_screen.dart
+@@ -1241,7 +1241,6 @@ class _BuySheet extends StatefulWidget {
+ 
+ class _BuySheetState extends State<_BuySheet> {
+   final _nameCtrl  = TextEditingController();
+-  final _priceCtrl = TextEditingController();
+   String _emoji    = '';
+   String? _error;
+ 
+@@ -1254,14 +1253,14 @@ class _BuySheetState extends State<_BuySheet> {
+   @override
+   void dispose() {
+     _nameCtrl.dispose();
+-    _priceCtrl.dispose();
+     super.dispose();
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final range   = TileModel.priceRange(widget.tile.plotType);
++    final price   = widget.tile.price ?? TileModel.fixedPrice(widget.tile.plotType);
+     final balance = widget.gs.currentPlayer.money;
++    final canAfford = balance >= price;
+ 
+     return DraggableScrollableSheet(
+       initialChildSize: 0.80,
+@@ -1304,8 +1303,9 @@ class _BuySheetState extends State<_BuySheet> {
+                 const SizedBox(height: 3),
+                 const Text('PURCHASE PLOT', style: TextStyle(
+                   color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
+-                Text('Suggested: ${_f(range.$1)} – ${_f(range.$2)}',
+-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
++                Text('Bank price: ${_f(price)}',
++                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10,
++                      fontWeight: FontWeight.w700)),
+               ]),
+             ]),
+           ),
+@@ -1355,33 +1355,33 @@ class _BuySheetState extends State<_BuySheet> {
+                 onChanged: (_) => setState(() => _error = null),
+               ),
+               const SizedBox(height: 14),
+-              // Price
++              // Fixed bank price — no negotiation, same for every player
+               Row(children: [
+-                const Text('Your Price (₹)', style: TextStyle(
++                const Text('Plot Price (₹)', style: TextStyle(
+                     color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                 const Spacer(),
+                 Text('Your cash: ${_f(balance)}',
+-                  style: const TextStyle(color: AppColors.success, fontSize: 11)),
++                  style: TextStyle(
++                    color: canAfford ? AppColors.success : AppColors.danger,
++                    fontSize: 11)),
+               ]),
+-              const SizedBox(height: 6),
+-              Text('Range: ${_f(range.$1)} → ${_f(range.$2)}',
+-                style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
+               const SizedBox(height: 8),
+-              TextField(
+-                controller: _priceCtrl,
+-                keyboardType: TextInputType.number,
+-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 20,
+-                    fontWeight: FontWeight.w800),
+-                decoration: const InputDecoration(
+-                  prefixText: '₹ ',
+-                  prefixStyle: TextStyle(color: AppColors.accent, fontSize: 20,
+-                      fontWeight: FontWeight.w700),
+-                  hintText: '0',
+-                  hintStyle: TextStyle(color: AppColors.textHint),
++              Container(
++                width: double.infinity,
++                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
++                decoration: BoxDecoration(
++                  color: AppColors.appSurface,
++                  borderRadius: BorderRadius.circular(12),
++                  border: Border.all(color: AppColors.appBorder),
+                 ),
+-                onChanged: (_) => setState(() => _error = null),
++                child: Text('₹ ${_f(price)}', style: const TextStyle(
++                  color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
+               ),
++              if (!canAfford) ...[
++                const SizedBox(height: 8),
++                const Text('❌ Insufficient funds for this plot',
++                  style: TextStyle(color: AppColors.danger, fontSize: 12)),
++              ],
+               if (_error != null) ...[
+                 const SizedBox(height: 6),
+                 Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+@@ -1390,36 +1390,24 @@ class _BuySheetState extends State<_BuySheet> {
+               SizedBox(
+                 width: double.infinity,
+                 child: ElevatedButton(
+-                  onPressed: () {
+-                    final price = double.tryParse(_priceCtrl.text) ?? 0;
+-                    final name  = _nameCtrl.text.trim();
++                  onPressed: !canAfford ? null : () {
++                    final name = _nameCtrl.text.trim();
+                     if (name.isEmpty) {
+                       setState(() => _error = 'Please enter a plot name');
+                       return;
+                     }
+-                    if (price < range.$1) {
+-                      setState(() => _error = 'Min price is ${_f(range.$1)}');
+-                      return;
+-                    }
+-                    if (price > range.$2) {
+-                      setState(() => _error = 'Max price is ${_f(range.$2)}');
+-                      return;
+-                    }
+-                    if (price > balance) {
+-                      setState(() => _error = '❌ Insufficient Funds!');
+-                      return;
+-                    }
+                     Navigator.pop(context);
+                     widget.onBuy(name, price, _emoji);
+                   },
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: AppColors.success,
++                    disabledBackgroundColor: AppColors.appBorder,
+                     padding: const EdgeInsets.symmetric(vertical: 16),
+                     shape: RoundedRectangleBorder(
+                         borderRadius: BorderRadius.circular(14)),
+                   ),
+-                  child: const Text('CONFIRM PURCHASE', style: TextStyle(
+-                      fontSize: 15, fontWeight: FontWeight.w900)),
++                  child: Text(canAfford ? 'CONFIRM PURCHASE' : 'CAN\'T AFFORD',
++                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+                 ),
+               ),
+               const SizedBox(height: 8),
+diff --git a/lib/features/game/presentation/screens/setup_game_screen.dart b/lib/features/game/presentation/screens/setup_game_screen.dart
+index ed848bc..daa4d15 100644
+--- a/lib/features/game/presentation/screens/setup_game_screen.dart
++++ b/lib/features/game/presentation/screens/setup_game_screen.dart
+@@ -18,9 +18,9 @@ class SetupGameScreen extends ConsumerStatefulWidget {
+ }
+ 
+ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
+-  int _boardSize = 20;
++  int _boardSize = 25;
+   int _playerCount = 2;
+-  int _endRounds = 5;
++  int _endRounds = 15;
+   bool _enableFarms = true;
+   bool _enableSurprise = true;
+   bool _enableLuckyWheel = true;
+@@ -134,7 +134,7 @@ Navigator.of(context).push(
+ 
+   Widget _buildBoardSizeSelector() {
+     return Row(
+-      children: [20, 40, 60, 100].map((size) {
++      children: [25, 40, 60, 100].map((size) {
+         final selected = _boardSize == size;
+         return Expanded(
+           child: GestureDetector(

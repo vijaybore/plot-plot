@@ -1241,7 +1241,6 @@ class _BuySheet extends StatefulWidget {
 
 class _BuySheetState extends State<_BuySheet> {
   final _nameCtrl  = TextEditingController();
-  final _priceCtrl = TextEditingController();
   String _emoji    = '';
   String? _error;
 
@@ -1254,14 +1253,14 @@ class _BuySheetState extends State<_BuySheet> {
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _priceCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final range   = TileModel.priceRange(widget.tile.plotType);
+    final price   = widget.tile.price ?? TileModel.fixedPrice(widget.tile.plotType);
     final balance = widget.gs.currentPlayer.money;
+    final canAfford = balance >= price;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.80,
@@ -1304,8 +1303,9 @@ class _BuySheetState extends State<_BuySheet> {
                 const SizedBox(height: 3),
                 const Text('PURCHASE PLOT', style: TextStyle(
                   color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
-                Text('Suggested: ${_f(range.$1)} – ${_f(range.$2)}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                Text('Bank price: ${_f(price)}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10,
+                      fontWeight: FontWeight.w700)),
               ]),
             ]),
           ),
@@ -1355,33 +1355,33 @@ class _BuySheetState extends State<_BuySheet> {
                 onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 14),
-              // Price
+              // Fixed bank price — no negotiation, same for every player
               Row(children: [
-                const Text('Your Price (₹)', style: TextStyle(
+                const Text('Plot Price (₹)', style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text('Your cash: ${_f(balance)}',
-                  style: const TextStyle(color: AppColors.success, fontSize: 11)),
+                  style: TextStyle(
+                    color: canAfford ? AppColors.success : AppColors.danger,
+                    fontSize: 11)),
               ]),
-              const SizedBox(height: 6),
-              Text('Range: ${_f(range.$1)} → ${_f(range.$2)}',
-                style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
               const SizedBox(height: 8),
-              TextField(
-                controller: _priceCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 20,
-                    fontWeight: FontWeight.w800),
-                decoration: const InputDecoration(
-                  prefixText: '₹ ',
-                  prefixStyle: TextStyle(color: AppColors.accent, fontSize: 20,
-                      fontWeight: FontWeight.w700),
-                  hintText: '0',
-                  hintStyle: TextStyle(color: AppColors.textHint),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.appSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.appBorder),
                 ),
-                onChanged: (_) => setState(() => _error = null),
+                child: Text('₹ ${_f(price)}', style: const TextStyle(
+                  color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
               ),
+              if (!canAfford) ...[
+                const SizedBox(height: 8),
+                const Text('❌ Insufficient funds for this plot',
+                  style: TextStyle(color: AppColors.danger, fontSize: 12)),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 6),
                 Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
@@ -1390,23 +1390,10 @@ class _BuySheetState extends State<_BuySheet> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    final price = double.tryParse(_priceCtrl.text) ?? 0;
-                    final name  = _nameCtrl.text.trim();
+                  onPressed: !canAfford ? null : () {
+                    final name = _nameCtrl.text.trim();
                     if (name.isEmpty) {
                       setState(() => _error = 'Please enter a plot name');
-                      return;
-                    }
-                    if (price < range.$1) {
-                      setState(() => _error = 'Min price is ${_f(range.$1)}');
-                      return;
-                    }
-                    if (price > range.$2) {
-                      setState(() => _error = 'Max price is ${_f(range.$2)}');
-                      return;
-                    }
-                    if (price > balance) {
-                      setState(() => _error = '❌ Insufficient Funds!');
                       return;
                     }
                     Navigator.pop(context);
@@ -1414,12 +1401,13 @@ class _BuySheetState extends State<_BuySheet> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
+                    disabledBackgroundColor: AppColors.appBorder,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: const Text('CONFIRM PURCHASE', style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w900)),
+                  child: Text(canAfford ? 'CONFIRM PURCHASE' : 'CAN\'T AFFORD',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
                 ),
               ),
               const SizedBox(height: 8),

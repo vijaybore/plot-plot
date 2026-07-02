@@ -132,7 +132,7 @@ class TileModel extends Equatable {
     }
   }
 
-  // ── Suggested price range ────────────────────────────────────────
+  // ── Suggested price range (kept for reference / legacy boards) ───
   static (double min, double max) priceRange(PlotType type) {
     switch (type) {
       case PlotType.farm:         return (300000, 1500000);
@@ -145,6 +145,25 @@ class TileModel extends Equatable {
       case PlotType.lakeView:     return (2000000, 8000000);
       case PlotType.premium:      return (2500000, 10000000);
       case PlotType.luxury:       return (4000000, 20000000);
+    }
+  }
+
+  // ── Fixed listing price ──────────────────────────────────────────
+  // Every plot has one non-negotiable bank-set price based on its type.
+  // No more "player types in any number" — the board is a real price list,
+  // like Ludo squares are fixed positions with fixed rules.
+  static double fixedPrice(PlotType type) {
+    switch (type) {
+      case PlotType.farm:         return 800000;   // 8L  — cheapest, income plot
+      case PlotType.residential:  return 1200000;  // 12L
+      case PlotType.garden:       return 1500000;  // 15L
+      case PlotType.corner:       return 1800000;  // 18L — corner premium
+      case PlotType.industrial:   return 2000000;  // 20L
+      case PlotType.highwayFacing:return 2000000;  // 20L
+      case PlotType.commercial:   return 2500000;  // 25L
+      case PlotType.lakeView:     return 2800000;  // 28L
+      case PlotType.premium:      return 3200000;  // 32L
+      case PlotType.luxury:       return 4000000;  // 40L
     }
   }
 
@@ -325,7 +344,9 @@ class TileFactory {
         tiles.add(TileModel(
           index: flatIndex++,
           type: tileType,
-          // price intentionally null — player sets on purchase
+          // price is fixed by the bank at creation — same price for every
+          // player, every game. Only the owner's chosen name/emoji is custom.
+          price: TileModel.fixedPrice(plotType),
           name: _nameFor(plotType, plotCounter),
           lane: laneNum,
           positionInLane: pos,

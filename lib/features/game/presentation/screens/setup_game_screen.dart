@@ -18,9 +18,9 @@ class SetupGameScreen extends ConsumerStatefulWidget {
 }
 
 class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
-  int _boardSize = 20;
+  int _boardSize = 25;
   int _playerCount = 2;
-  int _endRounds = 5;
+  int _endRounds = 15;
   bool _enableFarms = true;
   bool _enableSurprise = true;
   bool _enableLuckyWheel = true;
@@ -134,7 +134,7 @@ Navigator.of(context).push(
 
   Widget _buildBoardSizeSelector() {
     return Row(
-      children: [20, 40, 60, 100].map((size) {
+      children: [25, 40, 60, 100].map((size) {
         final selected = _boardSize == size;
         return Expanded(
           child: GestureDetector(

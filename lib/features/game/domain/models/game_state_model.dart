@@ -29,6 +29,7 @@ class GameStateModel extends Equatable {
   final int boardSize;
   final int finalRoundsTotal;
   final int finalRoundsCurrent;
+  final int roundsPlayed;
   final String? eventMessage;
   final bool isOnline;
   final List<String> activityLog;
@@ -47,6 +48,7 @@ class GameStateModel extends Equatable {
     required this.boardSize,
     this.finalRoundsTotal = 5,
     this.finalRoundsCurrent = 0,
+    this.roundsPlayed = 0,
     this.eventMessage,
     this.isOnline = false,
     this.adminId,
@@ -90,6 +92,7 @@ class GameStateModel extends Equatable {
     int? boardSize,
     int? finalRoundsTotal,
     int? finalRoundsCurrent,
+    int? roundsPlayed,
     String? eventMessage,
     bool? isOnline,
     String? adminId,
@@ -108,6 +111,7 @@ class GameStateModel extends Equatable {
       boardSize: boardSize ?? this.boardSize,
       finalRoundsTotal: finalRoundsTotal ?? this.finalRoundsTotal,
       finalRoundsCurrent: finalRoundsCurrent ?? this.finalRoundsCurrent,
+      roundsPlayed: roundsPlayed ?? this.roundsPlayed,
       eventMessage: clearEventMessage ? null : (eventMessage ?? this.eventMessage),
       isOnline: isOnline ?? this.isOnline,
       adminId: adminId ?? this.adminId,
