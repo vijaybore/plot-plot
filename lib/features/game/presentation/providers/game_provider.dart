@@ -40,31 +40,57 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     ref.read(diceRollingProvider.notifier).state = true;
     await Future.delayed(const Duration(milliseconds: 700));
 
-    final dice   = _rng.nextInt(6) + 1;
-    final total  = gs.tiles.isNotEmpty ? gs.tiles.length : gs.boardSize;
-    final newPos = (cur.position + dice) % total;
-    final passGo = newPos < cur.position;
-    final salary = passGo
-        ? (AppConstants.salaryByBoardSize[gs.boardSize] ?? AppConstants.defaultSalary)
-        : 0.0;
+    final dice  = _rng.nextInt(6) + 1;
+    final total = gs.tiles.isNotEmpty ? gs.tiles.length : gs.boardSize;
 
     ref.read(diceRollingProvider.notifier).state = false;
 
-    final landedTile = gs.tiles[newPos];
-    String msg;
-    if (passGo) {
-      msg = '🏠 ${cur.displayName} passed GO! Collected ${_f(salary)}';
-      _log(msg);
-    } else {
-      msg = '🎲 ${cur.displayName} rolled $dice → landed on ${landedTile.displayName}';
-      _log(msg);
+    // Enter "moving" mode — buy/rent prompts stay hidden until the token
+    // has actually finished hopping across the board.
+    state = state!.copyWith(
+      lastDiceValue: dice,
+      isMoving: true,
+      lastEvent: GameEvent.none,
+      clearEventMessage: true,
+    );
+
+    // Hop ONE tile at a time — same mechanic as a Ludo token — writing the
+    // real position into game state on every hop so the board (which reads
+    // position directly) visibly moves step by step instead of teleporting.
+    int stepPos = cur.position;
+    bool passedGo = false;
+    for (int step = 0; step < dice; step++) {
+      if (state == null) return;
+      stepPos = (stepPos + 1) % total;
+      if (stepPos == 0) passedGo = true;
+      final gsNow = state!;
+      state = gsNow.copyWith(
+        players: gsNow.players.map((p) =>
+            p.id == cur.id ? p.copyWith(position: stepPos) : p).toList(),
+      );
+      await Future.delayed(const Duration(milliseconds: 220));
     }
 
-    state = gs.copyWith(
-      players: gs.players.map((p) => p.id == cur.id
-          ? p.copyWith(position: newPos, money: p.money + salary)
+    if (state == null) return;
+    final gs2 = state!;
+    final salary = passedGo
+        ? (AppConstants.salaryByBoardSize[gs2.boardSize] ?? AppConstants.defaultSalary)
+        : 0.0;
+
+    final landedTile = gs2.tiles[stepPos];
+    String msg;
+    if (passedGo) {
+      msg = '🏠 ${cur.displayName} passed GO! Collected ${_f(salary)}';
+    } else {
+      msg = '🎲 ${cur.displayName} rolled $dice → landed on ${landedTile.displayName}';
+    }
+    _log(msg);
+
+    state = gs2.copyWith(
+      players: gs2.players.map((p) => p.id == cur.id
+          ? p.copyWith(money: p.money + salary)
           : p).toList(),
-      lastDiceValue: dice,
+      isMoving: false,
       lastEvent: _eventFor(landedTile),
       eventMessage: msg,
     );

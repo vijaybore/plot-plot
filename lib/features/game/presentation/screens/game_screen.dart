@@ -20,7 +20,6 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen>
     with TickerProviderStateMixin {
   bool _showLog    = false;
-  Set<int> _highlighted = {};
   String? _toastMsg;
   late AnimationController _diceCtrl;
   late AnimationController _logCtrl;
@@ -81,33 +80,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _showLog ? _logCtrl.forward() : _logCtrl.reverse();
   }
 
-  // ── Dice roll with animation ──────────────────────────────────────
+  // ── Dice roll ────────────────────────────────────────────────────
   Future<void> _rollDice() async {
     final gs = ref.read(gameProvider);
     if (gs == null) return;
     _diceCtrl.forward(from: 0);
-    final startPos  = gs.currentPlayer.position;
-    final totalTiles = gs.tiles.isNotEmpty ? gs.tiles.length : gs.boardSize;
 
+    // rollDice() now writes the player's real position into game state one
+    // tile at a time, so simply awaiting it is enough — the board rebuilds
+    // on every hop via ref.watch and the token visibly moves step by step,
+    // exactly like a Ludo piece, instead of teleporting to the final tile.
     await ref.read(gameProvider.notifier).rollDice(ref);
 
-    final endPos = ref.read(gameProvider)?.currentPlayer.position ?? startPos;
-
-    // Animate path tile by tile
-    final path = <int>[];
-    int cur = startPos;
-    while (cur != endPos) {
-      cur = (cur + 1) % totalTiles;
-      path.add(cur);
-    }
-    for (final idx in path) {
-      if (!mounted) return;
-      setState(() => _highlighted = {idx});
-      await Future.delayed(const Duration(milliseconds: 180));
-    }
-    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) {
-      setState(() => _highlighted = {});
       final msg = ref.read(gameProvider)?.eventMessage;
       if (msg != null) _showToast(msg);
     }
@@ -161,7 +146,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     onRename: () => _showRenameSheet(gs, landedTile!),
                   ),
                   onLogTap: _toggleLog,
-                  highlightedTiles: _highlighted,
+                  highlightedTiles: gs.isMoving ? {cur.position} : const {},
                 ),
               ),
             ),
@@ -1374,7 +1359,7 @@ class _BuySheetState extends State<_BuySheet> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.appBorder),
                 ),
-                child: Text('₹ ${_f(price)}', style: const TextStyle(
+                child: Text(_f(price), style: const TextStyle(
                   color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
               ),
               if (!canAfford) ...[
