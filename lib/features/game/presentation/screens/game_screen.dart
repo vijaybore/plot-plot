@@ -417,21 +417,44 @@ class _EventBanner extends StatelessWidget {
   final String msg;
   const _EventBanner({required this.msg});
 
+  bool get _isMoneyEvent =>
+      msg.toLowerCase().contains('rent') ||
+      msg.toLowerCase().contains('paid') ||
+      msg.toLowerCase().contains('₹');
+
+  bool get _isGain => msg.toLowerCase().contains('to v') || msg.toLowerCase().contains('receive');
+
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-    decoration: BoxDecoration(
-      color: AppColors.appCard,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.appBorder),
-    ),
-    child: Text(msg,
-      style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
-          fontWeight: FontWeight.w600),
-      textAlign: TextAlign.center,
-      maxLines: 2, overflow: TextOverflow.ellipsis),
-  );
+  Widget build(BuildContext context) {
+    final glow = _isMoneyEvent
+        ? (_isGain ? AppColors.success : AppColors.accent)
+        : AppColors.appBorder;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: AppColors.glassSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: glow.withValues(alpha: _isMoneyEvent ? 0.7 : 1)),
+        boxShadow: _isMoneyEvent
+            ? [BoxShadow(color: glow.withValues(alpha: 0.3), blurRadius: 10)]
+            : null,
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+        if (_isMoneyEvent) ...[
+          const Text('💸', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 6),
+        ],
+        Flexible(
+          child: Text(msg,
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
+                fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        ),
+      ]),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -583,7 +606,7 @@ class _PlayerStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 95,
+    height: 130,
     child: ListView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -620,7 +643,7 @@ class _PlayerCard extends StatelessWidget {
         duration: const Duration(milliseconds: 300),
         width: 155,
         margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: isActive
               ? [player.color.withValues(alpha: 0.28), player.color.withValues(alpha: 0.10)]
@@ -634,11 +657,12 @@ class _PlayerCard extends StatelessWidget {
             color: player.color.withValues(alpha: 0.35),
             blurRadius: 10)] : [],
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(width: 26, height: 26,
               decoration: BoxDecoration(color: player.color, shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5)),
+                border: Border.all(color: Colors.white, width: 1.5),
+                boxShadow: [BoxShadow(color: player.color.withValues(alpha: 0.6), blurRadius: 6)]),
               child: Center(child: Text(
                 player.displayName.isNotEmpty ? player.displayName[0].toUpperCase() : '?',
                 style: const TextStyle(color: Colors.white, fontSize: 12,
@@ -651,13 +675,17 @@ class _PlayerCard extends StatelessWidget {
             if (isActive)
               const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
           ]),
-          const SizedBox(height: 4),
-          _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
+          const SizedBox(height: 5),
+          _row('Net Worth', _f(player.netWorth), AppColors.textGold, bold: true),
+          const SizedBox(height: 1),
           _row('Cash',      _f(player.money),    AppColors.success),
+          const SizedBox(height: 1),
           _row('Bank',      _f(player.bankBalance), AppColors.info),
-          if (player.loanAmount > 0)
+          if (player.loanAmount > 0) ...[
+            const SizedBox(height: 1),
             _row('Loan', _f(player.loanAmount),  AppColors.danger),
-          const Spacer(),
+          ],
+          const SizedBox(height: 6),
           Row(children: [
             const Text('🏠', style: TextStyle(fontSize: 9)),
             Text(' $plotCount  ', style: const TextStyle(
@@ -672,7 +700,7 @@ class _PlayerCard extends StatelessWidget {
   }
 
   Widget _row(String label, String value, Color vColor, {bool bold = false}) =>
-    Row(children: [
+    Row(mainAxisSize: MainAxisSize.min, children: [
       Text('$label: ', style: const TextStyle(color: AppColors.textHint, fontSize: 7.5)),
       Text(value, style: TextStyle(color: vColor, fontSize: bold ? 12 : 8.5,
           fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
@@ -1264,9 +1292,19 @@ class _BuySheetState extends State<_BuySheet> {
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: widget.tile.plotTypeColor.withValues(alpha: 0.2),
+              gradient: LinearGradient(
+                colors: [
+                  widget.tile.plotTypeColor.withValues(alpha: 0.35),
+                  AppColors.glassSurface,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: widget.tile.plotTypeColor),
+              border: Border.all(color: widget.tile.plotTypeColor.withValues(alpha: 0.8)),
+              boxShadow: [
+                BoxShadow(color: widget.tile.plotTypeColor.withValues(alpha: 0.25), blurRadius: 16),
+              ],
             ),
             child: Row(children: [
               Text(_emoji, style: const TextStyle(fontSize: 32)),
@@ -1280,7 +1318,7 @@ class _BuySheetState extends State<_BuySheet> {
                       borderRadius: BorderRadius.circular(4)),
                     child: Text(widget.tile.plotTypeLabel,
                       style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900,
-                          color: Color(0xFF333333)))),
+                          color: Colors.white))),
                   const SizedBox(width: 6),
                   Text(widget.tile.plotNumber,
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
@@ -1357,10 +1395,13 @@ class _BuySheetState extends State<_BuySheet> {
                 decoration: BoxDecoration(
                   color: AppColors.appSurface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.appBorder),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.6)),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.accent.withValues(alpha: 0.18), blurRadius: 14),
+                  ],
                 ),
                 child: Text(_f(price), style: const TextStyle(
-                  color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
+                  color: AppColors.accent, fontSize: 24, fontWeight: FontWeight.w900)),
               ),
               if (!canAfford) ...[
                 const SizedBox(height: 8),
@@ -1374,25 +1415,33 @@ class _BuySheetState extends State<_BuySheet> {
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: !canAfford ? null : () {
-                    final name = _nameCtrl.text.trim();
-                    if (name.isEmpty) {
-                      setState(() => _error = 'Please enter a plot name');
-                      return;
-                    }
-                    Navigator.pop(context);
-                    widget.onBuy(name, price, _emoji);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    disabledBackgroundColor: AppColors.appBorder,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: canAfford
+                        ? [BoxShadow(color: AppColors.success.withValues(alpha: 0.4), blurRadius: 16)]
+                        : [],
                   ),
-                  child: Text(canAfford ? 'CONFIRM PURCHASE' : 'CAN\'T AFFORD',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+                  child: ElevatedButton(
+                    onPressed: !canAfford ? null : () {
+                      final name = _nameCtrl.text.trim();
+                      if (name.isEmpty) {
+                        setState(() => _error = 'Please enter a plot name');
+                        return;
+                      }
+                      Navigator.pop(context);
+                      widget.onBuy(name, price, _emoji);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      disabledBackgroundColor: AppColors.appBorder,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text(canAfford ? 'CONFIRM PURCHASE' : 'CAN\'T AFFORD',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
