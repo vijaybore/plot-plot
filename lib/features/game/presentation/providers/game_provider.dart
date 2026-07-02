@@ -342,20 +342,53 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       roundsPlayed += 1;
       log.add('📈 Round $roundsPlayed complete — properties appreciated!');
 
-      // Game ends once the agreed number of rounds is reached — win goes to
-      // the highest net worth. This doesn't require every plot to be sold;
-      // with only 2 players and real plot prices that could take forever.
-      // Selling out early is still allowed and simply means more rent income
-      // for whoever bought, not an instant end.
-      if (roundsPlayed >= gs.finalRoundsTotal) {
-        log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
+      final purchasable = tiles.where((t) => t.isPurchasable);
+      final allSold = purchasable.isNotEmpty && purchasable.every((t) => t.isOwned);
+
+      // Game only starts counting down once every plot on the board has
+      // been bought. Before that, "End Game After" doesn't apply — with
+      // real plot prices, forcing an end at a fixed round could cut the
+      // game off while plots are still empty. Once everything is sold,
+      // the game runs for the configured number of extra rounds and then
+      // ends, with the win going to the highest net worth.
+      if (gs.phase != GamePhase.finalRound && allSold) {
+        log.add('🏁 All plots sold! Final ${gs.finalRoundsTotal} round(s) begin.');
         state = gs.copyWith(
           tiles: tiles,
           activityLog: log,
           roundsPlayed: roundsPlayed,
-          phase: GamePhase.ended,
-          lastEvent: GameEvent.gameEnded,
-          eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
+          currentPlayerIndex: gs.nextPlayerIndex,
+          phase: GamePhase.finalRound,
+          finalRoundsCurrent: 0,
+          lastEvent: GameEvent.none,
+          eventMessage: null,
+        );
+        return;
+      }
+
+      if (gs.phase == GamePhase.finalRound) {
+        final finalRoundsCurrent = gs.finalRoundsCurrent + 1;
+        if (finalRoundsCurrent >= gs.finalRoundsTotal) {
+          log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
+          state = gs.copyWith(
+            tiles: tiles,
+            activityLog: log,
+            roundsPlayed: roundsPlayed,
+            finalRoundsCurrent: finalRoundsCurrent,
+            phase: GamePhase.ended,
+            lastEvent: GameEvent.gameEnded,
+            eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
+          );
+          return;
+        }
+        state = gs.copyWith(
+          tiles: tiles,
+          activityLog: log,
+          roundsPlayed: roundsPlayed,
+          currentPlayerIndex: gs.nextPlayerIndex,
+          finalRoundsCurrent: finalRoundsCurrent,
+          lastEvent: GameEvent.none,
+          eventMessage: null,
         );
         return;
       }
@@ -368,6 +401,21 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       currentPlayerIndex: gs.nextPlayerIndex,
       lastEvent: GameEvent.none,
       eventMessage: null,
+    );
+  }
+
+  // ── Manual end (player-triggered, from the in-game menu) ───────────
+  void endGameNow() {
+    if (state == null) return;
+    final gs = state!;
+    if (gs.phase == GamePhase.ended) return;
+    final winner = gs.rankedPlayers.first.displayName;
+    final log = [...gs.activityLog, '🏆 Game ended by player. Winner: $winner'];
+    state = gs.copyWith(
+      activityLog: log,
+      phase: GamePhase.ended,
+      lastEvent: GameEvent.gameEnded,
+      eventMessage: '🏆 Game Over! $winner wins!',
     );
   }
 

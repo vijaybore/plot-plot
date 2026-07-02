@@ -68,7 +68,7 @@ class BankModal extends StatelessWidget {
                 const Text('BANK OVERVIEW', style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 18,
                     fontWeight: FontWeight.w900, letterSpacing: 1)),
-                Text('${gs.players.length} players · Round ${gs.finalRoundsCurrent + 1}',
+                Text('${gs.players.length} players · Round ${gs.roundsPlayed + 1}',
                     style: const TextStyle(
                         color: AppColors.textSecondary, fontSize: 12)),
               ]),

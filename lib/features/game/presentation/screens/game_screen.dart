@@ -122,7 +122,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
       body: SafeArea(
         child: Stack(children: [
           Column(children: [
-            _AppBar(gs: gs, onLogTap: _toggleLog),
+            _AppBar(gs: gs, onLogTap: _toggleLog,
+                onEndGame: () => ref.read(gameProvider.notifier).endGameNow()),
             _TurnBanner(player: cur),
             if (gs.eventMessage != null) _EventBanner(msg: gs.eventMessage!),
             Expanded(
@@ -275,7 +276,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
 class _AppBar extends StatelessWidget {
   final GameStateModel gs;
   final VoidCallback onLogTap;
-  const _AppBar({required this.gs, required this.onLogTap});
+  final VoidCallback onEndGame;
+  const _AppBar({required this.gs, required this.onLogTap, required this.onEndGame});
 
   @override
   Widget build(BuildContext context) {
@@ -304,6 +306,9 @@ class _AppBar extends StatelessWidget {
         _iconBtn('🏦', () {
           // handled by player strip
         }),
+        const SizedBox(width: 4),
+        // End Game (manual, player-triggered)
+        _iconBtn('🏁', () => _confirmEndGame(context)),
         const SizedBox(width: 4),
         // Log
         GestureDetector(
@@ -354,6 +359,30 @@ class _AppBar extends StatelessWidget {
           },
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
           child: const Text('Exit'),
+        ),
+      ],
+    ));
+  }
+
+  void _confirmEndGame(BuildContext ctx) {
+    showDialog(context: ctx, builder: (_) => AlertDialog(
+      backgroundColor: AppColors.appCard,
+      title: const Text('End Game?', style: TextStyle(color: AppColors.textPrimary)),
+      content: const Text(
+        'The game will end now and the win goes to whoever has the highest '
+        'net worth at this moment, regardless of round or plots left unsold.',
+        style: TextStyle(color: AppColors.textSecondary)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keep Playing')),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(ctx);
+            onEndGame();
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent,
+              foregroundColor: Colors.black),
+          child: const Text('End Game'),
         ),
       ],
     ));
@@ -839,7 +868,7 @@ class _TownshipOverview extends StatelessWidget {
                 ('Available', '${available.length}', AppColors.accent),
                 ('Township Value', _f(totalValue), AppColors.info),
                 ('Richest Player', richest.displayName, richest.color),
-                ('Turn #', '${gs.finalRoundsCurrent + 1}', AppColors.textSecondary),
+                ('Round #', '${gs.roundsPlayed + 1}', AppColors.textSecondary),
               ]),
               const SizedBox(height: 16),
               // Player rankings
