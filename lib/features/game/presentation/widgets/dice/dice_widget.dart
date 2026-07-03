@@ -219,6 +219,135 @@ class _FloatingDiceButtonState extends State<FloatingDiceButton>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  BottomBarDice — a decorative isometric "3D" die that sits centered in the
+//  dark bottom control bar. Purely presentational (the real roll happens via
+//  DiceWidget / FloatingDiceButton on the board) — it gives the bottom bar a
+//  tactile, physical focal point between the two player boxes.
+//  Faces shown: TOP = 1 pip, LEFT side = 3 pips, RIGHT side = 2 pips.
+// ─────────────────────────────────────────────────────────────────────────────
+class BottomBarDice extends StatefulWidget {
+  const BottomBarDice({super.key});
+
+  @override
+  State<BottomBarDice> createState() => _BottomBarDiceState();
+}
+
+class _BottomBarDiceState extends State<BottomBarDice>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bob;
+
+  @override
+  void initState() {
+    super.initState();
+    _bob = AnimationController(
+        vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() { _bob.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _bob,
+      builder: (_, child) => Transform.translate(
+        offset: Offset(0, -2 * _bob.value),
+        child: child,
+      ),
+      child: SizedBox(
+        width: 46,
+        height: 50,
+        child: CustomPaint(painter: _IsoDiePainter()),
+      ),
+    );
+  }
+}
+
+class _IsoDiePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final cx = w / 2;
+    // Isometric cube: top diamond + two side parallelograms.
+    final top    = Offset(cx, 0);
+    final left   = Offset(0, h * 0.30);
+    final right  = Offset(w, h * 0.30);
+    final center = Offset(cx, h * 0.55);
+    final bottomL = Offset(0, h * 0.30 + h * 0.45);
+    final bottomR = Offset(w, h * 0.30 + h * 0.45);
+    final bottomC = Offset(cx, h);
+
+    // Soft ground shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.35)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx, h + 2), width: w * 0.8, height: 6),
+      shadowPaint,
+    );
+
+    // TOP face (lightest — catches the light) — shows 1 pip
+    final topPath = Path()
+      ..moveTo(top.dx, top.dy)
+      ..lineTo(right.dx, right.dy)
+      ..lineTo(center.dx, center.dy)
+      ..lineTo(left.dx, left.dy)
+      ..close();
+    canvas.drawPath(topPath, Paint()..color = const Color(0xFFFDFDF7));
+    canvas.drawPath(topPath, Paint()
+      ..color = const Color(0xFFCFCABF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1);
+    _pip(canvas, Offset(cx, h * 0.27), 2.6);
+
+    // LEFT face (mid tone) — shows 3 pips
+    final leftPath = Path()
+      ..moveTo(left.dx, left.dy)
+      ..lineTo(center.dx, center.dy)
+      ..lineTo(bottomC.dx, bottomC.dy)
+      ..lineTo(bottomL.dx, bottomL.dy)
+      ..close();
+    canvas.drawPath(leftPath, Paint()..color = const Color(0xFFE3DECF));
+    canvas.drawPath(leftPath, Paint()
+      ..color = const Color(0xFFB8B2A0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1);
+    final lc = Offset((left.dx + center.dx + bottomC.dx + bottomL.dx) / 4,
+        (left.dy + center.dy + bottomC.dy + bottomL.dy) / 4);
+    _pip(canvas, Offset(lc.dx - w * 0.09, lc.dy - h * 0.09), 2.2);
+    _pip(canvas, lc, 2.2);
+    _pip(canvas, Offset(lc.dx + w * 0.09, lc.dy + h * 0.09), 2.2);
+
+    // RIGHT face (darkest — shadow side) — shows 2 pips
+    final rightPath = Path()
+      ..moveTo(right.dx, right.dy)
+      ..lineTo(bottomR.dx, bottomR.dy)
+      ..lineTo(bottomC.dx, bottomC.dy)
+      ..lineTo(center.dx, center.dy)
+      ..close();
+    canvas.drawPath(rightPath, Paint()..color = const Color(0xFFC9C3B2));
+    canvas.drawPath(rightPath, Paint()
+      ..color = const Color(0xFF9C9686)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1);
+    final rc = Offset((right.dx + bottomR.dx + bottomC.dx + center.dx) / 4,
+        (right.dy + bottomR.dy + bottomC.dy + center.dy) / 4);
+    _pip(canvas, Offset(rc.dx - w * 0.08, rc.dy - h * 0.06), 2.2);
+    _pip(canvas, Offset(rc.dx + w * 0.08, rc.dy + h * 0.06), 2.2);
+  }
+
+  void _pip(Canvas canvas, Offset o, double r) {
+    canvas.drawCircle(o.translate(0.4, 0.5), r,
+        Paint()..color = Colors.black.withValues(alpha: 0.35));
+    canvas.drawCircle(o, r, Paint()..color = const Color(0xFF2A2A2A));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Classic pip painter
 // ─────────────────────────────────────────────────────────────────────────────
 class _PipPainter extends CustomPainter {

@@ -10,6 +10,7 @@ class GameBoardWidget extends StatelessWidget {
   final Widget centerWidget;          // dice area shown in header
   final VoidCallback? onLogTap;
   final Set<int> highlightedTiles;    // positions being traversed (animation)
+  final String? currentPlayerId;      // whose turn it is — for traffic light
 
   const GameBoardWidget({
     super.key,
@@ -19,6 +20,7 @@ class GameBoardWidget extends StatelessWidget {
     required this.centerWidget,
     this.onLogTap,
     this.highlightedTiles = const {},
+    this.currentPlayerId,
   });
 
   @override
@@ -66,6 +68,7 @@ class GameBoardWidget extends StatelessWidget {
                       allPlayers: players,
                       isLast: ln == laneNums.last,
                       highlightedTiles: highlightedTiles,
+                      currentPlayerId: currentPlayerId,
                     )),
                     const SizedBox(height: 6),
                   ],
@@ -281,6 +284,7 @@ class _LaneSection extends StatelessWidget {
   final List<PlayerModel> allPlayers;
   final bool isLast;
   final Set<int> highlightedTiles;
+  final String? currentPlayerId;
 
   const _LaneSection({
     required this.laneNumber,
@@ -288,6 +292,7 @@ class _LaneSection extends StatelessWidget {
     required this.allPlayers,
     required this.isLast,
     required this.highlightedTiles,
+    this.currentPlayerId,
   });
 
   @override
@@ -366,6 +371,7 @@ class _LaneSection extends StatelessWidget {
             isHighlighted: highlightedTiles.contains(tile.index),
             width: 110,
             height: 130,
+            currentPlayerId: currentPlayerId,
           );
         }).toList(),
       ),

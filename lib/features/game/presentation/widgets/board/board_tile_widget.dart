@@ -10,6 +10,7 @@ class PlotTileCard extends StatefulWidget {
   final double width;
   final double height;
   final bool isHighlighted; // for movement animation
+  final String? currentPlayerId; // whose turn — shows the traffic light
 
   const PlotTileCard({
     super.key,
@@ -19,6 +20,7 @@ class PlotTileCard extends StatefulWidget {
     this.width = 110,
     this.height = 130,
     this.isHighlighted = false,
+    this.currentPlayerId,
   });
 
   @override
@@ -278,19 +280,29 @@ class _PlotTileCardState extends State<PlotTileCard>
     ],
   );
 
-  // ── Player tokens at bottom — a small stylized "standing figure" pin ─
-  // (head + body silhouette) with the player's initial on the head,
-  // rather than a plain flat dot.
+  // ── Player letter tokens at bottom ───────────────────────────────
+  // Clean 3D-stylized letter badges — no floating heads / full bodies.
+  // The active player's token gets a small traffic-light marker beside it
+  // to show whose turn it is right there on the board.
   Widget _playerTokens() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4, left: 3, right: 3),
+      padding: const EdgeInsets.only(bottom: 5, left: 3, right: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: widget.players.take(4).map((p) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-          child: _PlayerPin(color: p.color, initial: p.displayName.isNotEmpty
-              ? p.displayName.substring(0, 1).toUpperCase() : '?'),
-        )).toList(),
+        children: widget.players.take(4).expand((p) {
+          final isCurrent = widget.currentPlayerId != null &&
+              p.id == widget.currentPlayerId;
+          return [
+            if (isCurrent) ...[
+              const _TrafficLight3D(),
+              const SizedBox(width: 2),
+            ],
+            _Token3D(letter: p.displayName.isNotEmpty
+                ? p.displayName.substring(0, 1).toUpperCase() : '?',
+                color: p.color),
+            const SizedBox(width: 3),
+          ];
+        }).toList(),
       ),
     );
   }
@@ -306,8 +318,7 @@ class _PlotTileCardState extends State<PlotTileCard>
       case PlotType.premium:       return '🌟';
       case PlotType.garden:        return '🌳';
       case PlotType.highwayFacing: return '🛣️';
-      // Corner plots now share the Bank's clean cyan look — no icon clutter.
-      case PlotType.corner:        return '';
+      case PlotType.corner:        return '📐';
       default:                     return '🏡';
     }
   }
@@ -335,57 +346,88 @@ class _PlotTileCardState extends State<PlotTileCard>
   }
 }
 
+// ── 3D stylized letter token (replaces avatar-head / full-body pieces) ─────
+// A bold, glossy, circular badge with a bevel highlight and drop shadow so
+// it reads as a physical 3D playing piece rather than a flat icon.
+class _Token3D extends StatelessWidget {
+  final String letter;
+  final Color color;
+  const _Token3D({required this.letter, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 22,
+    height: 22,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(
+        center: const Alignment(-0.35, -0.45),
+        radius: 1.1,
+        colors: [
+          Color.lerp(color, Colors.white, 0.55)!,
+          color,
+          Color.lerp(color, Colors.black, 0.30)!,
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ),
+      border: Border.all(color: Colors.white, width: 1.4),
+      boxShadow: [
+        BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 5),
+        const BoxShadow(color: Colors.black38, blurRadius: 2, offset: Offset(0, 2)),
+      ],
+    ),
+    child: Center(
+      child: Text(
+        letter,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          shadows: [Shadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
+        ),
+      ),
+    ),
+  );
+}
+
+// ── 3D traffic light — marks whose turn it is, right on the board ──────────
+class _TrafficLight3D extends StatelessWidget {
+  const _TrafficLight3D();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 10,
+    height: 22,
+    padding: const EdgeInsets.symmetric(vertical: 1.5, horizontal: 1.2),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [Color(0xFF3A3A3A), Color(0xFF1A1A1A)],
+      ),
+      borderRadius: BorderRadius.circular(2.5),
+      border: Border.all(color: const Color(0xFF0A0A0A), width: 0.6),
+      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _bulb(const Color(0xFFE53935), lit: false),
+        _bulb(const Color(0xFFFFC107), lit: false),
+        _bulb(const Color(0xFF43A047), lit: true), // green = your turn
+      ],
+    ),
+  );
+
+  Widget _bulb(Color color, {required bool lit}) => Container(
+    width: 6, height: 6,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: lit ? color : color.withValues(alpha: 0.25),
+      boxShadow: lit ? [BoxShadow(color: color, blurRadius: 4, spreadRadius: 0.5)] : null,
+    ),
+  );
+}
+
 // Legacy alias
 typedef BoardTileWidget = PlotTileCard;
 enum TileDirection { top, bottom, left, right }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Player Pin — a compact "standing figure" marker: a round head with the
-// player's initial, standing on a small rounded body/base, instead of a
-// flat single dot. Kept simple/vector so it stays crisp at any size.
-// ─────────────────────────────────────────────────────────────────────────────
-class _PlayerPin extends StatelessWidget {
-  final Color color;
-  final String initial;
-  const _PlayerPin({required this.color, required this.initial});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 18,
-      height: 21,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Head
-          Container(
-            width: 14, height: 14,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 1.2),
-              boxShadow: [
-                BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 3),
-              ],
-            ),
-            child: Center(
-              child: Text(initial, style: const TextStyle(
-                  color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900)),
-            ),
-          ),
-          // Body / base
-          Container(
-            width: 12, height: 6,
-            margin: const EdgeInsets.only(top: 1),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(5), bottom: Radius.circular(2)),
-              border: Border.all(color: Colors.white, width: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

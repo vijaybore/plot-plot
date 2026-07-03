@@ -1,0 +1,665 @@
+diff --git a/lib/features/game/presentation/providers/game_provider.dart b/lib/features/game/presentation/providers/game_provider.dart
+index 19ea2de..ac15117 100644
+--- a/lib/features/game/presentation/providers/game_provider.dart
++++ b/lib/features/game/presentation/providers/game_provider.dart
+@@ -117,7 +117,17 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
+ 
+       case TileType.surprise:
+       case TileType.luckyWheel:
+-        await _handleSurprise();
++        // Special rule: rolling exactly a 6 to land on Surprise always
++        // triggers the "Skip Next Turn" event (guaranteed, not random).
++        // Because turns are round-robin, this means the OTHER player(s)
++        // effectively get to play through this player's next turn before
++        // it comes back around to them (in a 2-player game that means the
++        // opponent plays twice in a row before this player rolls again).
++        if (gs.lastDiceValue == 6) {
++          await _handleLuckySixSkip();
++        } else {
++          await _handleSurprise();
++        }
+ 
+       case TileType.bank:
+         // Just trigger the bank event — UI opens bank panel
+@@ -138,6 +148,23 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
+     }
+   }
+ 
++  // ── Lucky Six → guaranteed Skip Turn ────────────────────────────────
++  Future<void> _handleLuckySixSkip() async {
++    if (state == null) return;
++    final gs = state!;
++    final p  = gs.currentPlayer;
++    final msg = '🎲6️⃣🎁 Lucky Six! ${p.displayName} landed on Surprise and '
++        'will skip their next turn!';
++    _log(msg);
++    state = gs.copyWith(
++      players: gs.players.map((pl) =>
++          pl.id == p.id ? pl.copyWith(skipNextTurn: true) : pl).toList(),
++      activityLog: [...gs.activityLog, msg],
++      eventMessage: msg,
++      lastEvent: GameEvent.landedOnSurprise,
++    );
++  }
++
+   // ── Surprise / Lucky Wheel ────────────────────────────────────────
+   Future<void> _handleSurprise() async {
+     if (state == null) return;
+diff --git a/lib/features/game/presentation/screens/game_screen.dart b/lib/features/game/presentation/screens/game_screen.dart
+index c37ec56..ed5a566 100644
+--- a/lib/features/game/presentation/screens/game_screen.dart
++++ b/lib/features/game/presentation/screens/game_screen.dart
+@@ -8,6 +8,7 @@ import '../../domain/models/player_model.dart';
+ import '../providers/game_provider.dart';
+ import 'package:flutter/material.dart';
+ import '../widgets/board/game_board_widget.dart';
++import '../widgets/dice/dice_widget.dart';
+ 
+ class GameScreen extends ConsumerStatefulWidget {
+   final GameStateModel? initialState;
+@@ -131,6 +132,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
+                 child: GameBoardWidget(
+                   tiles: gs.tiles,
+                   players: gs.players,
++                  currentPlayerId: cur.id,
+                   centerWidget: _DiceArea(
+                     gs: gs,
+                     isRolling: isRolling,
+@@ -305,20 +307,28 @@ class _AppBar extends StatelessWidget {
+           // handled by player strip
+         }),
+         const SizedBox(width: 4),
+-        // Log
++        // Log — teal gradient with high-contrast white text/icon so it
++        // stays legible against both light and dark board backgrounds.
+         GestureDetector(
+           onTap: onLogTap,
+           child: Container(
+-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
++            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+             decoration: BoxDecoration(
+-              color: AppColors.appCard,
++              gradient: const LinearGradient(
++                colors: [Color(0xFF00897B), Color(0xFF00D4AA)],
++                begin: Alignment.topLeft, end: Alignment.bottomRight,
++              ),
+               borderRadius: BorderRadius.circular(20),
+-              border: Border.all(color: AppColors.appBorder),
++              boxShadow: [
++                BoxShadow(color: const Color(0xFF00D4AA).withValues(alpha: 0.35),
++                    blurRadius: 8, offset: const Offset(0, 2)),
++              ],
+             ),
+             child: Row(children: const [
+               Text('📋', style: TextStyle(fontSize: 13)),
+-              SizedBox(width: 4),
+-              Text('Log', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
++              SizedBox(width: 5),
++              Text('Log', style: TextStyle(
++                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+             ]),
+           ),
+         ),
+@@ -582,21 +592,49 @@ class _PlayerStrip extends StatelessWidget {
+   const _PlayerStrip({required this.gs, required this.onBankTap});
+ 
+   @override
+-  Widget build(BuildContext context) => SizedBox(
+-    height: 95,
+-    child: ListView(
+-      scrollDirection: Axis.horizontal,
+-      padding: const EdgeInsets.symmetric(horizontal: 8),
+-      children: [
+-        ...gs.players.map((p) => _PlayerCard(
+-          player: p,
+-          isActive: p.id == gs.currentPlayer.id,
+-          ownedTiles: gs.tiles.where((t) => t.ownerId == p.id).toList(),
+-          onBankTap: () => onBankTap(gs),
+-        )),
+-      ],
+-    ),
+-  );
++  Widget build(BuildContext context) {
++    final cards = gs.players.map((p) => _PlayerCard(
++      player: p,
++      isActive: p.id == gs.currentPlayer.id,
++      ownedTiles: gs.tiles.where((t) => t.ownerId == p.id).toList(),
++      onBankTap: () => onBankTap(gs),
++      width: null, // fills whatever parent gives it (Expanded or SizedBox)
++    )).toList();
++
++    return Container(
++      height: 118,
++      decoration: const BoxDecoration(
++        // Dark bottom control bar
++        color: Color(0xFF14141F),
++        border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
++      ),
++      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
++      child: gs.players.length == 2
++          // 2-player layout: token box — 3D dice — token box, dice centered
++          // in the middle of the bottom bar as its own focal element.
++          ? Row(children: [
++              Expanded(child: cards[0]),
++              const SizedBox(width: 8),
++              const BottomBarDice(),
++              const SizedBox(width: 8),
++              Expanded(child: cards[1]),
++            ])
++          : ListView(
++              scrollDirection: Axis.horizontal,
++              children: [
++                SizedBox(width: 155, child: cards[0]),
++                const SizedBox(width: 8),
++                const BottomBarDice(),
++                const SizedBox(width: 8),
++                for (final c in cards.skip(1))
++                  Padding(
++                    padding: const EdgeInsets.only(right: 8),
++                    child: SizedBox(width: 155, child: c),
++                  ),
++              ],
++            ),
++    );
++  }
+ }
+ 
+ class _PlayerCard extends StatelessWidget {
+@@ -604,9 +642,10 @@ class _PlayerCard extends StatelessWidget {
+   final bool isActive;
+   final List<TileModel> ownedTiles;
+   final VoidCallback onBankTap;
++  final double? width; // null = fill parent (used inside Expanded)
+ 
+   const _PlayerCard({required this.player, required this.isActive,
+-    required this.ownedTiles, required this.onBankTap});
++    required this.ownedTiles, required this.onBankTap, this.width = 155});
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -618,9 +657,14 @@ class _PlayerCard extends StatelessWidget {
+       onTap: onBankTap,
+       child: AnimatedContainer(
+         duration: const Duration(milliseconds: 300),
+-        width: 155,
+-        margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
++        width: width,
++        // Fixed, generous height with tight internal spacing — the old
++        // layout relied on a Spacer() inside a too-short box, which is
++        // exactly what produced "BOTTOM OVERFLOWED" in debug builds
++        // whenever the optional Loan row appeared. Giving every row a
++        // fixed slot (no Spacer) guarantees it always fits.
++        height: 102,
++        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+         decoration: BoxDecoration(
+           gradient: LinearGradient(colors: isActive
+               ? [player.color.withValues(alpha: 0.28), player.color.withValues(alpha: 0.10)]
+@@ -634,39 +678,54 @@ class _PlayerCard extends StatelessWidget {
+             color: player.color.withValues(alpha: 0.35),
+             blurRadius: 10)] : [],
+         ),
+-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+-          Row(children: [
+-            Container(width: 26, height: 26,
+-              decoration: BoxDecoration(color: player.color, shape: BoxShape.circle,
+-                border: Border.all(color: Colors.white, width: 1.5)),
+-              child: Center(child: Text(
+-                player.displayName.isNotEmpty ? player.displayName[0].toUpperCase() : '?',
+-                style: const TextStyle(color: Colors.white, fontSize: 12,
+-                    fontWeight: FontWeight.w900)))),
+-            const SizedBox(width: 6),
+-            Expanded(child: Text(player.displayName,
+-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 10,
+-                  fontWeight: FontWeight.w700),
+-              overflow: TextOverflow.ellipsis)),
+-            if (isActive)
+-              const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
+-          ]),
+-          const SizedBox(height: 4),
+-          _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
+-          _row('Cash',      _f(player.money),    AppColors.success),
+-          _row('Bank',      _f(player.bankBalance), AppColors.info),
+-          if (player.loanAmount > 0)
+-            _row('Loan', _f(player.loanAmount),  AppColors.danger),
+-          const Spacer(),
+-          Row(children: [
+-            const Text('🏠', style: TextStyle(fontSize: 9)),
+-            Text(' $plotCount  ', style: const TextStyle(
+-                color: AppColors.textSecondary, fontSize: 8)),
+-            const Text('🌾', style: TextStyle(fontSize: 9)),
+-            Text(' $farmCount', style: const TextStyle(
+-                color: AppColors.textSecondary, fontSize: 8)),
+-          ]),
+-        ]),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.start,
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Row(children: [
++              Container(width: 24, height: 24,
++                decoration: BoxDecoration(color: player.color, shape: BoxShape.circle,
++                  border: Border.all(color: Colors.white, width: 1.5)),
++                child: Center(child: Text(
++                  player.displayName.isNotEmpty ? player.displayName[0].toUpperCase() : '?',
++                  style: const TextStyle(color: Colors.white, fontSize: 11,
++                      fontWeight: FontWeight.w900)))),
++              const SizedBox(width: 6),
++              Expanded(child: Text(player.displayName,
++                style: const TextStyle(color: AppColors.textPrimary, fontSize: 10,
++                    fontWeight: FontWeight.w700),
++                overflow: TextOverflow.ellipsis)),
++              if (isActive)
++                const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
++            ]),
++            const SizedBox(height: 3),
++            _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
++            _row('Cash',      _f(player.money),    AppColors.success),
++            // Bank + Loan share one row so the card height never depends
++            // on whether the player currently has a loan.
++            Row(children: [
++              Expanded(child: _row('Bank', _f(player.bankBalance), AppColors.info)),
++              if (player.loanAmount > 0)
++                Expanded(child: _row('Loan', _f(player.loanAmount), AppColors.danger)),
++            ]),
++            const SizedBox(height: 3),
++            Row(children: [
++              const Text('🏠', style: TextStyle(fontSize: 9)),
++              Text(' $plotCount  ', style: const TextStyle(
++                  color: AppColors.textSecondary, fontSize: 8)),
++              const Text('🌾', style: TextStyle(fontSize: 9)),
++              Text(' $farmCount', style: const TextStyle(
++                  color: AppColors.textSecondary, fontSize: 8)),
++              const Spacer(),
++              if (player.hasShield)
++                const Text('🛡️', style: TextStyle(fontSize: 10)),
++              if (player.skipNextTurn) ...[
++                const SizedBox(width: 3),
++                const Text('⏭️', style: TextStyle(fontSize: 10)),
++              ],
++            ]),
++          ],
++        ),
+       ),
+     );
+   }
+@@ -674,8 +733,11 @@ class _PlayerCard extends StatelessWidget {
+   Widget _row(String label, String value, Color vColor, {bool bold = false}) =>
+     Row(children: [
+       Text('$label: ', style: const TextStyle(color: AppColors.textHint, fontSize: 7.5)),
+-      Text(value, style: TextStyle(color: vColor, fontSize: bold ? 12 : 8.5,
+-          fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
++      Flexible(
++        child: Text(value, style: TextStyle(color: vColor, fontSize: bold ? 11.5 : 8.5,
++            fontWeight: bold ? FontWeight.w900 : FontWeight.w600),
++            overflow: TextOverflow.ellipsis),
++      ),
+     ]);
+ 
+   String _f(double v) {
+@@ -1558,6 +1620,8 @@ class _RulesSheet extends StatelessWidget {
+               'Farm plots generate ₹2L passive income per round. Owning more farms means steady cash flow every round.'),
+             _RuleSection('🎁 Surprise Events',
+               'Landing on a Surprise or Lucky tile triggers a random event:\n✅ Positive: Lottery (₹10L), Grant (₹15L), Harvest (₹5L)\n❌ Negative: Tax Audit (-10%), Storm Damage (-7%), Maintenance (-₹3L)\n⚡ Special: Shield, Extra Turn, Move Back'),
++            _RuleSection('🎲6️⃣ Lucky Six Rule',
++              'Roll exactly a 6 and land on a Surprise tile → that player automatically skips their next turn (no random chance — this one is guaranteed).\n\nBecause turns pass in order, this means the other player gets to take their turn, then — since the six-roller\'s turn is skipped — immediately takes another turn right after. In a 2-player game that\'s two turns in a row for your opponent before play comes back to you.'),
+             _RuleSection('🏦 Banking',
+               'Tap any player card to open the Bank:\n• Deposit cash → earn safety\n• Withdraw → get cash back\n• Take Loan → instant cash (repay with 5% interest)\n• Transfer money to another player'),
+             _RuleSection('🛡️ Shield',
+diff --git a/lib/features/game/presentation/widgets/board/board_tile_widget.dart b/lib/features/game/presentation/widgets/board/board_tile_widget.dart
+index 3f85b42..47ebea0 100644
+--- a/lib/features/game/presentation/widgets/board/board_tile_widget.dart
++++ b/lib/features/game/presentation/widgets/board/board_tile_widget.dart
+@@ -10,6 +10,7 @@ class PlotTileCard extends StatefulWidget {
+   final double width;
+   final double height;
+   final bool isHighlighted; // for movement animation
++  final String? currentPlayerId; // whose turn — shows the traffic light
+ 
+   const PlotTileCard({
+     super.key,
+@@ -19,6 +20,7 @@ class PlotTileCard extends StatefulWidget {
+     this.width = 110,
+     this.height = 130,
+     this.isHighlighted = false,
++    this.currentPlayerId,
+   });
+ 
+   @override
+@@ -279,38 +281,28 @@ class _PlotTileCardState extends State<PlotTileCard>
+   );
+ 
+   // ── Player letter tokens at bottom ───────────────────────────────
++  // Clean 3D-stylized letter badges — no floating heads / full bodies.
++  // The active player's token gets a small traffic-light marker beside it
++  // to show whose turn it is right there on the board.
+   Widget _playerTokens() {
+     return Padding(
+       padding: const EdgeInsets.only(bottom: 5, left: 3, right: 3),
+       child: Row(
+         mainAxisAlignment: MainAxisAlignment.center,
+-        children: widget.players.take(4).map((p) => Container(
+-          width: 20,
+-          height: 20,
+-          margin: const EdgeInsets.symmetric(horizontal: 1.5),
+-          decoration: BoxDecoration(
+-            color: p.color,
+-            shape: BoxShape.circle,
+-            border: Border.all(color: Colors.white, width: 1.5),
+-            boxShadow: [
+-              BoxShadow(
+-                color: p.color.withValues(alpha: 0.6),
+-                blurRadius: 4,
+-                spreadRadius: 0,
+-              ),
++        children: widget.players.take(4).expand((p) {
++          final isCurrent = widget.currentPlayerId != null &&
++              p.id == widget.currentPlayerId;
++          return [
++            if (isCurrent) ...[
++              const _TrafficLight3D(),
++              const SizedBox(width: 2),
+             ],
+-          ),
+-          child: Center(
+-            child: Text(
+-              p.displayName.substring(0, 1).toUpperCase(),
+-              style: const TextStyle(
+-                color: Colors.white,
+-                fontSize: 9,
+-                fontWeight: FontWeight.w900,
+-              ),
+-            ),
+-          ),
+-        )).toList(),
++            _Token3D(letter: p.displayName.isNotEmpty
++                ? p.displayName.substring(0, 1).toUpperCase() : '?',
++                color: p.color),
++            const SizedBox(width: 3),
++          ];
++        }).toList(),
+       ),
+     );
+   }
+@@ -354,6 +346,88 @@ class _PlotTileCardState extends State<PlotTileCard>
+   }
+ }
+ 
++// ── 3D stylized letter token (replaces avatar-head / full-body pieces) ─────
++// A bold, glossy, circular badge with a bevel highlight and drop shadow so
++// it reads as a physical 3D playing piece rather than a flat icon.
++class _Token3D extends StatelessWidget {
++  final String letter;
++  final Color color;
++  const _Token3D({required this.letter, required this.color});
++
++  @override
++  Widget build(BuildContext context) => Container(
++    width: 22,
++    height: 22,
++    decoration: BoxDecoration(
++      shape: BoxShape.circle,
++      gradient: RadialGradient(
++        center: const Alignment(-0.35, -0.45),
++        radius: 1.1,
++        colors: [
++          Color.lerp(color, Colors.white, 0.55)!,
++          color,
++          Color.lerp(color, Colors.black, 0.30)!,
++        ],
++        stops: const [0.0, 0.55, 1.0],
++      ),
++      border: Border.all(color: Colors.white, width: 1.4),
++      boxShadow: [
++        BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 5),
++        const BoxShadow(color: Colors.black38, blurRadius: 2, offset: Offset(0, 2)),
++      ],
++    ),
++    child: Center(
++      child: Text(
++        letter,
++        style: const TextStyle(
++          color: Colors.white,
++          fontSize: 10,
++          fontWeight: FontWeight.w900,
++          shadows: [Shadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
++        ),
++      ),
++    ),
++  );
++}
++
++// ── 3D traffic light — marks whose turn it is, right on the board ──────────
++class _TrafficLight3D extends StatelessWidget {
++  const _TrafficLight3D();
++
++  @override
++  Widget build(BuildContext context) => Container(
++    width: 10,
++    height: 22,
++    padding: const EdgeInsets.symmetric(vertical: 1.5, horizontal: 1.2),
++    decoration: BoxDecoration(
++      gradient: const LinearGradient(
++        begin: Alignment.topLeft, end: Alignment.bottomRight,
++        colors: [Color(0xFF3A3A3A), Color(0xFF1A1A1A)],
++      ),
++      borderRadius: BorderRadius.circular(2.5),
++      border: Border.all(color: const Color(0xFF0A0A0A), width: 0.6),
++      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
++    ),
++    child: Column(
++      mainAxisAlignment: MainAxisAlignment.spaceBetween,
++      children: [
++        _bulb(const Color(0xFFE53935), lit: false),
++        _bulb(const Color(0xFFFFC107), lit: false),
++        _bulb(const Color(0xFF43A047), lit: true), // green = your turn
++      ],
++    ),
++  );
++
++  Widget _bulb(Color color, {required bool lit}) => Container(
++    width: 6, height: 6,
++    decoration: BoxDecoration(
++      shape: BoxShape.circle,
++      color: lit ? color : color.withValues(alpha: 0.25),
++      boxShadow: lit ? [BoxShadow(color: color, blurRadius: 4, spreadRadius: 0.5)] : null,
++    ),
++  );
++}
++
+ // Legacy alias
+ typedef BoardTileWidget = PlotTileCard;
+ enum TileDirection { top, bottom, left, right }
+\ No newline at end of file
+diff --git a/lib/features/game/presentation/widgets/board/game_board_widget.dart b/lib/features/game/presentation/widgets/board/game_board_widget.dart
+index 0afe09b..110ced9 100644
+--- a/lib/features/game/presentation/widgets/board/game_board_widget.dart
++++ b/lib/features/game/presentation/widgets/board/game_board_widget.dart
+@@ -10,6 +10,7 @@ class GameBoardWidget extends StatelessWidget {
+   final Widget centerWidget;          // dice area shown in header
+   final VoidCallback? onLogTap;
+   final Set<int> highlightedTiles;    // positions being traversed (animation)
++  final String? currentPlayerId;      // whose turn it is — for traffic light
+ 
+   const GameBoardWidget({
+     super.key,
+@@ -19,6 +20,7 @@ class GameBoardWidget extends StatelessWidget {
+     required this.centerWidget,
+     this.onLogTap,
+     this.highlightedTiles = const {},
++    this.currentPlayerId,
+   });
+ 
+   @override
+@@ -66,6 +68,7 @@ class GameBoardWidget extends StatelessWidget {
+                       allPlayers: players,
+                       isLast: ln == laneNums.last,
+                       highlightedTiles: highlightedTiles,
++                      currentPlayerId: currentPlayerId,
+                     )),
+                     const SizedBox(height: 6),
+                   ],
+@@ -281,6 +284,7 @@ class _LaneSection extends StatelessWidget {
+   final List<PlayerModel> allPlayers;
+   final bool isLast;
+   final Set<int> highlightedTiles;
++  final String? currentPlayerId;
+ 
+   const _LaneSection({
+     required this.laneNumber,
+@@ -288,6 +292,7 @@ class _LaneSection extends StatelessWidget {
+     required this.allPlayers,
+     required this.isLast,
+     required this.highlightedTiles,
++    this.currentPlayerId,
+   });
+ 
+   @override
+@@ -367,6 +372,7 @@ class _LaneSection extends StatelessWidget {
+             isHighlighted: highlightedTiles.contains(tile.index),
+             width: 110,
+             height: 130,
++            currentPlayerId: currentPlayerId,
+           );
+         }).toList(),
+       ),
+diff --git a/lib/features/game/presentation/widgets/dice/dice_widget.dart b/lib/features/game/presentation/widgets/dice/dice_widget.dart
+index d1446b9..1f41948 100644
+--- a/lib/features/game/presentation/widgets/dice/dice_widget.dart
++++ b/lib/features/game/presentation/widgets/dice/dice_widget.dart
+@@ -218,6 +218,135 @@ class _FloatingDiceButtonState extends State<FloatingDiceButton>
+   }
+ }
+ 
++// ─────────────────────────────────────────────────────────────────────────────
++//  BottomBarDice — a decorative isometric "3D" die that sits centered in the
++//  dark bottom control bar. Purely presentational (the real roll happens via
++//  DiceWidget / FloatingDiceButton on the board) — it gives the bottom bar a
++//  tactile, physical focal point between the two player boxes.
++//  Faces shown: TOP = 1 pip, LEFT side = 3 pips, RIGHT side = 2 pips.
++// ─────────────────────────────────────────────────────────────────────────────
++class BottomBarDice extends StatefulWidget {
++  const BottomBarDice({super.key});
++
++  @override
++  State<BottomBarDice> createState() => _BottomBarDiceState();
++}
++
++class _BottomBarDiceState extends State<BottomBarDice>
++    with SingleTickerProviderStateMixin {
++  late final AnimationController _bob;
++
++  @override
++  void initState() {
++    super.initState();
++    _bob = AnimationController(
++        vsync: this, duration: const Duration(seconds: 2))
++      ..repeat(reverse: true);
++  }
++
++  @override
++  void dispose() { _bob.dispose(); super.dispose(); }
++
++  @override
++  Widget build(BuildContext context) {
++    return AnimatedBuilder(
++      animation: _bob,
++      builder: (_, child) => Transform.translate(
++        offset: Offset(0, -2 * _bob.value),
++        child: child,
++      ),
++      child: SizedBox(
++        width: 46,
++        height: 50,
++        child: CustomPaint(painter: _IsoDiePainter()),
++      ),
++    );
++  }
++}
++
++class _IsoDiePainter extends CustomPainter {
++  @override
++  void paint(Canvas canvas, Size size) {
++    final w = size.width, h = size.height;
++    final cx = w / 2;
++    // Isometric cube: top diamond + two side parallelograms.
++    final top    = Offset(cx, 0);
++    final left   = Offset(0, h * 0.30);
++    final right  = Offset(w, h * 0.30);
++    final center = Offset(cx, h * 0.55);
++    final bottomL = Offset(0, h * 0.30 + h * 0.45);
++    final bottomR = Offset(w, h * 0.30 + h * 0.45);
++    final bottomC = Offset(cx, h);
++
++    // Soft ground shadow
++    final shadowPaint = Paint()
++      ..color = Colors.black.withValues(alpha: 0.35)
++      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
++    canvas.drawOval(
++      Rect.fromCenter(center: Offset(cx, h + 2), width: w * 0.8, height: 6),
++      shadowPaint,
++    );
++
++    // TOP face (lightest — catches the light) — shows 1 pip
++    final topPath = Path()
++      ..moveTo(top.dx, top.dy)
++      ..lineTo(right.dx, right.dy)
++      ..lineTo(center.dx, center.dy)
++      ..lineTo(left.dx, left.dy)
++      ..close();
++    canvas.drawPath(topPath, Paint()..color = const Color(0xFFFDFDF7));
++    canvas.drawPath(topPath, Paint()
++      ..color = const Color(0xFFCFCABF)
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 1);
++    _pip(canvas, Offset(cx, h * 0.27), 2.6);
++
++    // LEFT face (mid tone) — shows 3 pips
++    final leftPath = Path()
++      ..moveTo(left.dx, left.dy)
++      ..lineTo(center.dx, center.dy)
++      ..lineTo(bottomC.dx, bottomC.dy)
++      ..lineTo(bottomL.dx, bottomL.dy)
++      ..close();
++    canvas.drawPath(leftPath, Paint()..color = const Color(0xFFE3DECF));
++    canvas.drawPath(leftPath, Paint()
++      ..color = const Color(0xFFB8B2A0)
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 1);
++    final lc = Offset((left.dx + center.dx + bottomC.dx + bottomL.dx) / 4,
++        (left.dy + center.dy + bottomC.dy + bottomL.dy) / 4);
++    _pip(canvas, Offset(lc.dx - w * 0.09, lc.dy - h * 0.09), 2.2);
++    _pip(canvas, lc, 2.2);
++    _pip(canvas, Offset(lc.dx + w * 0.09, lc.dy + h * 0.09), 2.2);
++
++    // RIGHT face (darkest — shadow side) — shows 2 pips
++    final rightPath = Path()
++      ..moveTo(right.dx, right.dy)
++      ..lineTo(bottomR.dx, bottomR.dy)
++      ..lineTo(bottomC.dx, bottomC.dy)
++      ..lineTo(center.dx, center.dy)
++      ..close();
++    canvas.drawPath(rightPath, Paint()..color = const Color(0xFFC9C3B2));
++    canvas.drawPath(rightPath, Paint()
++      ..color = const Color(0xFF9C9686)
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 1);
++    final rc = Offset((right.dx + bottomR.dx + bottomC.dx + center.dx) / 4,
++        (right.dy + bottomR.dy + bottomC.dy + center.dy) / 4);
++    _pip(canvas, Offset(rc.dx - w * 0.08, rc.dy - h * 0.06), 2.2);
++    _pip(canvas, Offset(rc.dx + w * 0.08, rc.dy + h * 0.06), 2.2);
++  }
++
++  void _pip(Canvas canvas, Offset o, double r) {
++    canvas.drawCircle(o.translate(0.4, 0.5), r,
++        Paint()..color = Colors.black.withValues(alpha: 0.35));
++    canvas.drawCircle(o, r, Paint()..color = const Color(0xFF2A2A2A));
++  }
++
++  @override
++  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
++}
++
+ // ─────────────────────────────────────────────────────────────────────────────
+ //  Classic pip painter
+ // ─────────────────────────────────────────────────────────────────────────────

@@ -95,24 +95,18 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       eventMessage: msg,
     );
 
-    await _handleTileLanding(landedTile, dice);
+    await _handleTileLanding(landedTile);
   }
 
-  Future<void> _handleTileLanding(TileModel tile, int dice) async {
+  Future<void> _handleTileLanding(TileModel tile) async {
     if (state == null) return;
     final gs = state!;
     final cur = gs.currentPlayer;
 
     switch (tile.type) {
       case TileType.tax:
-        // City Tax — a small recurring cost for using roads & public
-        // services. Kept low (see AppConstants.cityTaxRate) so it's a minor
-        // drag, not a game-ending penalty. Charged on landing on a CITY TAX
-        // infrastructure tile (roads/public-service upkeep).
-        final tax = (cur.money * AppConstants.cityTaxRate)
-            .clamp(0, cur.money).roundToDouble();
-        final msg = '🛣️ ${cur.displayName} paid city tax ${_f(tax)} '
-            '(roads & public services upkeep)';
+        final tax = (cur.money * 0.08).clamp(0, cur.money).roundToDouble();
+        final msg = '💰 ${cur.displayName} paid city tax ${_f(tax)}';
         _log(msg);
         state = gs.copyWith(
           players: gs.players.map((p) => p.id == cur.id
@@ -123,7 +117,17 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
       case TileType.surprise:
       case TileType.luckyWheel:
-        await _handleSurprise(dice);
+        // Special rule: rolling exactly a 6 to land on Surprise always
+        // triggers the "Skip Next Turn" event (guaranteed, not random).
+        // Because turns are round-robin, this means the OTHER player(s)
+        // effectively get to play through this player's next turn before
+        // it comes back around to them (in a 2-player game that means the
+        // opponent plays twice in a row before this player rolls again).
+        if (gs.lastDiceValue == 6) {
+          await _handleLuckySixSkip();
+        } else {
+          await _handleSurprise();
+        }
 
       case TileType.bank:
         // Just trigger the bank event — UI opens bank panel
@@ -144,19 +148,29 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     }
   }
 
-  // ── Surprise / Lucky Wheel ────────────────────────────────────────
-  // The event drawn — and its reward/penalty — scales with the exact dice
-  // number that brought the player onto the Surprise tile. Each dice face
-  // (1-6) maps to a pair of possible outcomes, escalating from mild,
-  // guaranteed-upside events on a low roll (1) to bigger risk on a high
-  // roll (6). A secondary coin-flip just picks which of that dice's two
-  // outcomes fires, so the same dice value still keeps some variety.
-  Future<void> _handleSurprise(int dice) async {
+  // ── Lucky Six → guaranteed Skip Turn ────────────────────────────────
+  Future<void> _handleLuckySixSkip() async {
     if (state == null) return;
     final gs = state!;
     final p  = gs.currentPlayer;
-    final variant = _rng.nextInt(2); // 0 or 1 — flavor within the dice tier
-    final int roll = (((dice.clamp(1, 6) - 1) * 2 + variant)).clamp(0, 11).toInt();
+    final msg = '🎲6️⃣🎁 Lucky Six! ${p.displayName} landed on Surprise and '
+        'will skip their next turn!';
+    _log(msg);
+    state = gs.copyWith(
+      players: gs.players.map((pl) =>
+          pl.id == p.id ? pl.copyWith(skipNextTurn: true) : pl).toList(),
+      activityLog: [...gs.activityLog, msg],
+      eventMessage: msg,
+      lastEvent: GameEvent.landedOnSurprise,
+    );
+  }
+
+  // ── Surprise / Lucky Wheel ────────────────────────────────────────
+  Future<void> _handleSurprise() async {
+    if (state == null) return;
+    final gs = state!;
+    final p  = gs.currentPlayer;
+    final roll = _rng.nextInt(12);
     String msg;
     List<PlayerModel> players = List.from(gs.players);
 
@@ -214,8 +228,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
             pl.id == p.id ? pl.copyWith(skipNextTurn: true) : pl).toList();
     }
 
-    final fullMsg = '🎲 Rolled a $dice → $msg';
-    _log(fullMsg);
+    _log(msg);
 
     // Apply market crash to tiles
     List<TileModel> tiles = state!.tiles;
@@ -231,8 +244,8 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     state = state!.copyWith(
       players: players,
       tiles: tiles,
-      activityLog: [...state!.activityLog, fullMsg],
-      eventMessage: fullMsg,
+      activityLog: [...state!.activityLog, msg],
+      eventMessage: msg,
       lastEvent: GameEvent.landedOnSurprise,
     );
   }
