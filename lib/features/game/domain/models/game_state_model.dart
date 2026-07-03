@@ -1,5 +1,4 @@
 import 'package:equatable/equatable.dart';
-import '../../../../core/constants/app_constants.dart';
 import 'player_model.dart';
 import 'tile_model.dart';
 
@@ -37,6 +36,8 @@ class GameStateModel extends Equatable {
   final String? adminId;
   final int? lastDiceValue;
   final bool isMoving;
+  final double? customPriceMin; // custom-setup override for standard plots
+  final double? customPriceMax;
 
   const GameStateModel({
     required this.gameId,
@@ -56,6 +57,8 @@ class GameStateModel extends Equatable {
     this.lastDiceValue,
     this.isMoving = false,
     this.activityLog = const [],
+    this.customPriceMin,
+    this.customPriceMax,
   });
 
   PlayerModel get currentPlayer => players[currentPlayerIndex];
@@ -82,15 +85,6 @@ class GameStateModel extends Equatable {
     return sorted;
   }
 
-  // Total cash the central Bank currently has on hand: its starting reserve,
-  // minus everything it has lent out via loans, plus everything players
-  // currently have on deposit.
-  double get totalBankReserve {
-    final loaned = players.fold<double>(0, (s, p) => s + p.loanAmount);
-    final deposited = players.fold<double>(0, (s, p) => s + p.bankBalance);
-    return AppConstants.bankTotalReserve - loaned + deposited;
-  }
-
   GameStateModel copyWith({
     String? gameId,
     List<PlayerModel>? players,
@@ -109,6 +103,8 @@ class GameStateModel extends Equatable {
     int? lastDiceValue,
     bool clearEventMessage = false,
     bool? isMoving,
+    double? customPriceMin,
+    double? customPriceMax,
   }) {
     return GameStateModel(
       gameId: gameId ?? this.gameId,
@@ -127,6 +123,8 @@ class GameStateModel extends Equatable {
       adminId: adminId ?? this.adminId,
       lastDiceValue: lastDiceValue ?? this.lastDiceValue,
       isMoving: isMoving ?? this.isMoving,
+      customPriceMin: customPriceMin ?? this.customPriceMin,
+      customPriceMax: customPriceMax ?? this.customPriceMax,
       
     );
   }

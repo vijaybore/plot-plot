@@ -294,20 +294,30 @@ class _PlotTileCardState extends State<PlotTileCard>
   Widget _playerTokens() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4, left: 3, right: 3),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 2,
-        runSpacing: 2,
-        children: widget.players.take(4).expand((p) {
-          final isCurrent = widget.currentPlayerId != null &&
-              p.id == widget.currentPlayerId;
-          return [
-            _TrafficLight3D(active: isCurrent),
-            _Token3D(letter: p.displayName.isNotEmpty
-                ? p.displayName.substring(0, 1).toUpperCase() : '?',
-                color: p.color),
-          ];
-        }).toList(),
+      child: SizedBox(
+        height: 24,
+        width: double.infinity,
+        // FittedBox guarantees this can never throw a RenderFlex overflow,
+        // no matter how many tokens/lights are on this tile — it scales
+        // the whole row down to fit instead of letting it spill out.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 2,
+            runSpacing: 2,
+            children: widget.players.take(4).expand((p) {
+              final isCurrent = widget.currentPlayerId != null &&
+                  p.id == widget.currentPlayerId;
+              return [
+                _TrafficLight3D(active: isCurrent),
+                _Token3D(letter: p.displayName.isNotEmpty
+                    ? p.displayName.substring(0, 1).toUpperCase() : '?',
+                    color: p.color),
+              ];
+            }).toList(),
+          ),
+        ),
       ),
     );
   }
