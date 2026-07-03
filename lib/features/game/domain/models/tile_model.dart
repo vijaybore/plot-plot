@@ -168,13 +168,15 @@ class TileModel extends Equatable {
   }
 
   // ── Plot type colors & labels ────────────────────────────────────
+  // Corner plots share the Bank's light-cyan tone so the board reads as
+  // one clean, unified palette instead of a rainbow of plot-type colors.
   Color get plotTypeColor {
     switch (plotType) {
       case PlotType.residential:   return const Color(0xFFB8E6B8);
       case PlotType.farm:          return const Color(0xFFD4E887);
       case PlotType.commercial:    return const Color(0xFFADD8F0);
       case PlotType.industrial:    return const Color(0xFFD4C5B0);
-      case PlotType.corner:        return const Color(0xFFFFDDA0);
+      case PlotType.corner:        return const Color(0xFFB3E5FC); // Bank cyan
       case PlotType.lakeView:      return const Color(0xFFA0E8E8);
       case PlotType.premium:       return const Color(0xFFE8C8F0);
       case PlotType.highwayFacing: return const Color(0xFFFFBDBD);

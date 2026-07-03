@@ -296,7 +296,6 @@ class _LaneSection extends StatelessWidget {
     children: [
       _header(),
       _tileRow(),
-      if (!isLast) _road(),
     ],
   );
 
@@ -370,45 +369,6 @@ class _LaneSection extends StatelessWidget {
           );
         }).toList(),
       ),
-    ),
-  );
-
-  Widget _road() => Container(
-    height: 24,
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Color(0xFFD4C9B0), Color(0xFFC5B99A), Color(0xFFD4C9B0)],
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-      ),
-    ),
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(14, (i) => Container(
-            width: 14, height: 2.5,
-            color: Colors.white.withValues(alpha: 0.45),
-          )),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: const Text(
-            'INTERNAL ROAD',
-            style: TextStyle(
-              color: Color(0xFF6D5B3B),
-              fontSize: 7,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.8,
-            ),
-          ),
-        ),
-      ],
     ),
   );
 

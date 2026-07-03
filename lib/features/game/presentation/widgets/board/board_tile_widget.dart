@@ -278,38 +278,18 @@ class _PlotTileCardState extends State<PlotTileCard>
     ],
   );
 
-  // ── Player letter tokens at bottom ───────────────────────────────
+  // ── Player tokens at bottom — a small stylized "standing figure" pin ─
+  // (head + body silhouette) with the player's initial on the head,
+  // rather than a plain flat dot.
   Widget _playerTokens() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5, left: 3, right: 3),
+      padding: const EdgeInsets.only(bottom: 4, left: 3, right: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: widget.players.take(4).map((p) => Container(
-          width: 20,
-          height: 20,
-          margin: const EdgeInsets.symmetric(horizontal: 1.5),
-          decoration: BoxDecoration(
-            color: p.color,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: p.color.withValues(alpha: 0.6),
-                blurRadius: 4,
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              p.displayName.substring(0, 1).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
+        children: widget.players.take(4).map((p) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1.5),
+          child: _PlayerPin(color: p.color, initial: p.displayName.isNotEmpty
+              ? p.displayName.substring(0, 1).toUpperCase() : '?'),
         )).toList(),
       ),
     );
@@ -326,7 +306,8 @@ class _PlotTileCardState extends State<PlotTileCard>
       case PlotType.premium:       return '🌟';
       case PlotType.garden:        return '🌳';
       case PlotType.highwayFacing: return '🛣️';
-      case PlotType.corner:        return '📐';
+      // Corner plots now share the Bank's clean cyan look — no icon clutter.
+      case PlotType.corner:        return '';
       default:                     return '🏡';
     }
   }
@@ -357,3 +338,54 @@ class _PlotTileCardState extends State<PlotTileCard>
 // Legacy alias
 typedef BoardTileWidget = PlotTileCard;
 enum TileDirection { top, bottom, left, right }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Player Pin — a compact "standing figure" marker: a round head with the
+// player's initial, standing on a small rounded body/base, instead of a
+// flat single dot. Kept simple/vector so it stays crisp at any size.
+// ─────────────────────────────────────────────────────────────────────────────
+class _PlayerPin extends StatelessWidget {
+  final Color color;
+  final String initial;
+  const _PlayerPin({required this.color, required this.initial});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 18,
+      height: 21,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Head
+          Container(
+            width: 14, height: 14,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1.2),
+              boxShadow: [
+                BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 3),
+              ],
+            ),
+            child: Center(
+              child: Text(initial, style: const TextStyle(
+                  color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900)),
+            ),
+          ),
+          // Body / base
+          Container(
+            width: 12, height: 6,
+            margin: const EdgeInsets.only(top: 1),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(5), bottom: Radius.circular(2)),
+              border: Border.all(color: Colors.white, width: 0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
