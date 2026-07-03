@@ -451,6 +451,7 @@ class _LaneSection extends StatelessWidget {
     if (laneNumber % 4 == 0) return 'COMMERCIAL';
     if (laneNumber % 3 == 0) return 'FARM ZONE';
     if (laneNumber == 1)     return 'HIGHWAY FACING';
+    if (laneNumber == 2)     return 'INTERNAL COMMERCE';
     return '';
   }
 
@@ -458,6 +459,7 @@ class _LaneSection extends StatelessWidget {
     if (laneNumber % 4 == 0) return const Color(0xFF1565C0);
     if (laneNumber % 3 == 0) return const Color(0xFF558B2F);
     if (laneNumber == 1)     return const Color(0xFFE65100);
+    if (laneNumber == 2)     return const Color(0xFF6A1B9A);
     return const Color(0xFF5D4037);
   }
 }

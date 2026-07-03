@@ -93,10 +93,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // exactly like a Ludo piece, instead of teleporting to the final tile.
     await ref.read(gameProvider.notifier).rollDice(ref);
 
-    if (mounted) {
-      final msg = ref.read(gameProvider)?.eventMessage;
-      if (msg != null) _showToast(msg);
-    }
+    // NOTE: gs.eventMessage is already surfaced persistently by _EventBanner
+    // (and, for Surprise / Lucky Wheel, by the detail modal too). Firing the
+    // toast here as well used to double- and triple-render the exact same
+    // string on screen at once. The toast is now reserved for one-off
+    // confirmations (e.g. purchase success) that don't already have a
+    // persistent banner of their own.
   }
 
   @override
@@ -681,7 +683,7 @@ class _PlayerStrip extends StatelessWidget {
   }
 }
 
-class _PlayerCard extends StatelessWidget {
+class _PlayerCard extends StatefulWidget {
   final PlayerModel player;
   final bool isActive;
   final List<TileModel> ownedTiles;
@@ -692,35 +694,66 @@ class _PlayerCard extends StatelessWidget {
     required this.ownedTiles, required this.onBankTap, this.width = 155});
 
   @override
+  State<_PlayerCard> createState() => _PlayerCardState();
+}
+
+class _PlayerCardState extends State<_PlayerCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
+  late final Animation<double> _pulse =
+      Tween<double>(begin: 0.35, end: 1.0)
+          .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final player = widget.player;
+    final isActive = widget.isActive;
+    final ownedTiles = widget.ownedTiles;
+    final width = widget.width;
     final farmCount = ownedTiles.where((t) =>
         t.plotType == PlotType.farm || t.type == TileType.farmZone).length;
     final plotCount = ownedTiles.length - farmCount;
 
     return GestureDetector(
-      onTap: onBankTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        width: width,
-        // Fixed, generous height with tight internal spacing — the old
-        // layout relied on a Spacer() inside a too-short box, which is
-        // exactly what produced "BOTTOM OVERFLOWED" in debug builds
-        // whenever the optional Loan row appeared. Giving every row a
-        // fixed slot (no Spacer) guarantees it always fits.
-        height: 102,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: isActive
-              ? [player.color.withValues(alpha: 0.28), player.color.withValues(alpha: 0.10)]
-              : [AppColors.appCard, AppColors.appCard]),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? player.color : AppColors.appBorder,
-            width: isActive ? 2 : 1,
+      onTap: widget.onBankTap,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (_, child) => Container(
+          width: width,
+          // Fixed, generous height with tight internal spacing — the old
+          // layout relied on a Spacer() inside a too-short box, which is
+          // exactly what produced "BOTTOM OVERFLOWED" in debug builds
+          // whenever the optional Loan row appeared. Giving every row a
+          // fixed slot (no Spacer) guarantees it always fits.
+          height: 102,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            // Uniform dark navy background whether resting or active —
+            // active turn is now communicated purely by the pulsing
+            // border glow below, not by a solid color fill.
+            color: AppColors.appCard,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isActive
+                  ? player.color.withValues(alpha: _pulse.value)
+                  : AppColors.appBorder,
+              width: isActive ? 2.5 : 1,
+            ),
+            boxShadow: isActive ? [BoxShadow(
+              color: player.color.withValues(alpha: 0.45 * _pulse.value),
+              blurRadius: 14,
+              spreadRadius: 1,
+            )] : [],
           ),
-          boxShadow: isActive ? [BoxShadow(
-            color: player.color.withValues(alpha: 0.35),
-            blurRadius: 10)] : [],
+          child: child,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
