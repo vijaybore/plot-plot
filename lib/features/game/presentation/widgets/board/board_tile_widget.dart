@@ -60,19 +60,17 @@ class _PlotTileCardState extends State<PlotTileCard>
           border: Border.all(
             color: widget.isHighlighted
                 ? AppColors.accent.withValues(alpha: _glowAnim.value)
-                : (widget.tile.isOwned
-                    ? _ownerColor().withValues(alpha: 0.8)
-                    : AppColors.glassBorder),
-            width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 1.5 : 0.8),
+                : (widget.tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99)),
+            width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
           ),
           boxShadow: [
             BoxShadow(
               color: widget.isHighlighted
-                  ? AppColors.accent.withValues(alpha: 0.55 * _glowAnim.value)
+                  ? AppColors.accent.withValues(alpha: 0.5 * _glowAnim.value)
                   : (widget.tile.isOwned
-                      ? _ownerColor().withValues(alpha: 0.35)
-                      : Colors.black.withValues(alpha: 0.25)),
-              blurRadius: widget.isHighlighted ? 14 : (widget.tile.isOwned ? 8 : 3),
+                      ? _ownerColor().withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.08)),
+              blurRadius: widget.isHighlighted ? 12 : 4,
               spreadRadius: widget.isHighlighted ? 2 : 0,
             ),
           ],
@@ -129,7 +127,7 @@ class _PlotTileCardState extends State<PlotTileCard>
               Text(
                 t.plotNumber,
                 style: const TextStyle(
-                  color: AppColors.textSecondary,
+                  color: Color(0xFF555555),
                   fontSize: 7.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.3,
@@ -138,7 +136,7 @@ class _PlotTileCardState extends State<PlotTileCard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                 decoration: BoxDecoration(
-                  color: t.plotTypeColor.withValues(alpha: 0.9),
+                  color: t.plotTypeColor,
                   borderRadius: BorderRadius.circular(3),
                   border: Border.all(
                       color: t.plotTypeColor.withValues(alpha: 0.6), width: 0.5),
@@ -146,7 +144,7 @@ class _PlotTileCardState extends State<PlotTileCard>
                 child: Text(
                   t.plotTypeLabel,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF333333),
                     fontSize: 6.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
@@ -178,8 +176,8 @@ class _PlotTileCardState extends State<PlotTileCard>
               t.isOwned ? t.displayName : 'Empty Plot',
               style: TextStyle(
                 color: t.isOwned
-                    ? Colors.white
-                    : AppColors.textHint,
+                    ? const Color(0xFF1A1A2E)
+                    : const Color(0xFF888888),
                 fontSize: 8,
                 fontWeight:
                     t.isOwned ? FontWeight.w800 : FontWeight.w500,
@@ -202,13 +200,13 @@ class _PlotTileCardState extends State<PlotTileCard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: AppColors.secondary.withValues(alpha: 0.18),
+                  color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(3),
                 ),
                 child: Text(
                   t.upgradeLevel > 1 ? t.upgradeName : 'Owned',
                   style: const TextStyle(
-                    color: AppColors.secondary,
+                    color: Color(0xFF2E7D32),
                     fontSize: 6.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -222,7 +220,7 @@ class _PlotTileCardState extends State<PlotTileCard>
               child: Text(
                 '— Available —',
                 style: TextStyle(
-                  color: AppColors.textHint,
+                  color: Colors.grey.shade500,
                   fontSize: 6.5,
                   fontStyle: FontStyle.italic,
                 ),
@@ -334,18 +332,15 @@ class _PlotTileCardState extends State<PlotTileCard>
   }
 
   Color _bgColor() {
-    if (widget.tile.type == TileType.start)      return const Color(0xFF0D1526);
-    if (widget.tile.type == TileType.surprise)   return const Color(0xFF2E2210);
-    if (widget.tile.type == TileType.luckyWheel) return const Color(0xFF2B260D);
-    if (widget.tile.type == TileType.tax)        return const Color(0xFF2E1414);
-    if (widget.tile.type == TileType.bank)       return const Color(0xFF0F2438);
+    if (widget.tile.type == TileType.start)      return const Color(0xFF1A1A2E);
+    if (widget.tile.type == TileType.surprise)   return const Color(0xFFFFF3E0);
+    if (widget.tile.type == TileType.luckyWheel) return const Color(0xFFFFFDE7);
+    if (widget.tile.type == TileType.tax)        return const Color(0xFFFFEBEE);
+    if (widget.tile.type == TileType.bank)       return const Color(0xFFE3F2FD);
     if (widget.tile.isOwned) {
-      return Color.alphaBlend(
-        widget.tile.plotTypeColor.withValues(alpha: 0.45),
-        AppColors.glassSurface,
-      );
+      return widget.tile.plotTypeColor.withValues(alpha: 0.88);
     }
-    return AppColors.glassSurface.withValues(alpha: 0.6);
+    return widget.tile.plotTypeColor.withValues(alpha: 0.28);
   }
 
   Color _ownerColor() {

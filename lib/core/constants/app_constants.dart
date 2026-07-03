@@ -51,6 +51,17 @@ class AppConstants {
 
   static const double baseRentPercent = 0.10;
 
+  // City Tax — a small recurring cost for using roads & public services.
+  // Kept deliberately low (2%) so it's a minor drag on cash, not a
+  // game-ending penalty. Charged whenever a player lands on a "CITY TAX"
+  // infrastructure tile.
+  static const double cityTaxRate = 0.02;
+
+  // Central Bank reserve — the pool of money the in-game Bank starts with.
+  // Shown to players as "Bank Balance Remaining" so they can see how much
+  // liquidity the bank has left to lend out via loans.
+  static const double bankTotalReserve = 500000000; // ₹50 Cr
+
   static const double smallLoan = 200000;
   static const double mediumLoan = 500000;
   static const double largeLoan = 1000000;

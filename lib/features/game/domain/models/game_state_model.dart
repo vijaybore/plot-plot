@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../core/constants/app_constants.dart';
 import 'player_model.dart';
 import 'tile_model.dart';
 
@@ -79,6 +80,15 @@ class GameStateModel extends Equatable {
     final sorted = [...players];
     sorted.sort((a, b) => b.netWorth.compareTo(a.netWorth));
     return sorted;
+  }
+
+  // Total cash the central Bank currently has on hand: its starting reserve,
+  // minus everything it has lent out via loans, plus everything players
+  // currently have on deposit.
+  double get totalBankReserve {
+    final loaned = players.fold<double>(0, (s, p) => s + p.loanAmount);
+    final deposited = players.fold<double>(0, (s, p) => s + p.bankBalance);
+    return AppConstants.bankTotalReserve - loaned + deposited;
   }
 
   GameStateModel copyWith({

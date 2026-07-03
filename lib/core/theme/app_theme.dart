@@ -12,26 +12,21 @@ class AppColors {
   static const Color secondary = Color(0xFF00D4AA);
   static const Color accent    = Color(0xFFFFB300);
 
-  // ── Board (dark glassmorphic) ──
-  static const Color boardBg        = Color(0xFF0F1729);
-  static const Color boardBorder    = Color(0xFF2A3A5C);
-  static const Color boardRoad      = Color(0xFF16213E);
-  static const Color boardGrass     = Color(0xFF2ECC71);
-  static const Color boardGrassLight = Color(0xFF58D68D);
+  // ── Board ──
+  static const Color boardBg        = Color(0xFFF5F0E8);
+  static const Color boardBorder    = Color(0xFFCCBB99);
+  static const Color boardRoad      = Color(0xFFD4C9B0);
+  static const Color boardGrass     = Color(0xFF4CAF50);
+  static const Color boardGrassLight = Color(0xFF66BB6A);
 
-  // ── Glass surfaces ──
-  static const Color glassSurface   = Color(0xFF16213E);
-  static const Color glassBorder    = Color(0xFF2E4066);
-  static const Color glowCyan       = Color(0xFF4CC9F0);
-
-  // ── Tile colors (muted for dark bg, still legible) ──
-  static const Color tileWhite  = Color(0xFF1B2A4A);
-  static const Color tileGreen  = Color(0xFF2E7D5B);
-  static const Color tileOrange = Color(0xFFB56A2E);
-  static const Color tilePurple = Color(0xFF8E5FA8);
-  static const Color tileBlue   = Color(0xFF3D7DBF);
-  static const Color tileRed    = Color(0xFFC0524D);
-  static const Color tileYellow = Color(0xFFC9A227);
+  // ── Tile colors ──
+  static const Color tileWhite  = Color(0xFFFFFDE7);
+  static const Color tileGreen  = Color(0xFFA5D6A7);
+  static const Color tileOrange = Color(0xFFFFCC80);
+  static const Color tilePurple = Color(0xFFCE93D8);
+  static const Color tileBlue   = Color(0xFF90CAF9);
+  static const Color tileRed    = Color(0xFFEF9A9A);
+  static const Color tileYellow = Color(0xFFFFF176);
 
   static const Color startTile    = Color(0xFF1A1A2E);
   static const Color surpriseTile = Color(0xFFFF9800);

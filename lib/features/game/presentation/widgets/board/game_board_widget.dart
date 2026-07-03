@@ -307,20 +307,18 @@ class _LaneSection extends StatelessWidget {
 
     return Container(
       height: 22,
-      color: AppColors.glassSurface,
+      color: const Color(0xFFE8E0D0),
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
           Container(
               width: 7, height: 7,
               decoration: BoxDecoration(
-                  color: _zoneColor(),
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: _zoneColor().withValues(alpha: 0.7), blurRadius: 4)])),
+                  color: _zoneColor(), shape: BoxShape.circle)),
           const SizedBox(width: 5),
           Text('Lane $laneNumber',
               style: const TextStyle(
-                  color: AppColors.textPrimary, fontSize: 9,
+                  color: Color(0xFF5D4037), fontSize: 9,
                   fontWeight: FontWeight.w800, letterSpacing: 0.3)),
           if (zoneLabel.isNotEmpty) ...[
             const SizedBox(width: 8),
@@ -341,18 +339,18 @@ class _LaneSection extends StatelessWidget {
           if (laneNumber % 3 == 0) ...[
             const SizedBox(width: 6),
             const Text('🌿 Income',
-                style: TextStyle(color: AppColors.boardGrassLight, fontSize: 7.5)),
+                style: TextStyle(color: Color(0xFF558B2F), fontSize: 7.5)),
           ],
           const Spacer(),
           Text('$availCount/$ownedCount avail',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 7)),
+              style: const TextStyle(color: Color(0xFF8D6E63), fontSize: 7)),
         ],
       ),
     );
   }
 
   Widget _tileRow() => Container(
-    color: AppColors.boardBg,
+    color: const Color(0xFFF0EBE0),
     padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
     child: SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -377,13 +375,9 @@ class _LaneSection extends StatelessWidget {
 
   Widget _road() => Container(
     height: 24,
-    decoration: BoxDecoration(
+    decoration: const BoxDecoration(
       gradient: LinearGradient(
-        colors: [
-          AppColors.boardRoad,
-          AppColors.glowCyan.withValues(alpha: 0.15),
-          AppColors.boardRoad,
-        ],
+        colors: [Color(0xFFD4C9B0), Color(0xFFC5B99A), Color(0xFFD4C9B0)],
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
       ),
@@ -394,24 +388,20 @@ class _LaneSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(14, (i) => Container(
-            width: 14, height: 2,
-            decoration: BoxDecoration(
-              color: AppColors.glowCyan.withValues(alpha: 0.5),
-              boxShadow: [BoxShadow(color: AppColors.glowCyan.withValues(alpha: 0.4), blurRadius: 3)],
-            ),
+            width: 14, height: 2.5,
+            color: Colors.white.withValues(alpha: 0.45),
           )),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
           decoration: BoxDecoration(
-            color: AppColors.boardBg.withValues(alpha: 0.7),
+            color: Colors.white.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: AppColors.glassBorder, width: 0.8),
           ),
           child: const Text(
             'INTERNAL ROAD',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: Color(0xFF6D5B3B),
               fontSize: 7,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.8,

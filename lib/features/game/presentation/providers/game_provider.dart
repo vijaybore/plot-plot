@@ -95,18 +95,24 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       eventMessage: msg,
     );
 
-    await _handleTileLanding(landedTile);
+    await _handleTileLanding(landedTile, dice);
   }
 
-  Future<void> _handleTileLanding(TileModel tile) async {
+  Future<void> _handleTileLanding(TileModel tile, int dice) async {
     if (state == null) return;
     final gs = state!;
     final cur = gs.currentPlayer;
 
     switch (tile.type) {
       case TileType.tax:
-        final tax = (cur.money * 0.08).clamp(0, cur.money).roundToDouble();
-        final msg = '💰 ${cur.displayName} paid city tax ${_f(tax)}';
+        // City Tax — a small recurring cost for using roads & public
+        // services. Kept low (see AppConstants.cityTaxRate) so it's a minor
+        // drag, not a game-ending penalty. Charged on landing on a CITY TAX
+        // infrastructure tile (roads/public-service upkeep).
+        final tax = (cur.money * AppConstants.cityTaxRate)
+            .clamp(0, cur.money).roundToDouble();
+        final msg = '🛣️ ${cur.displayName} paid city tax ${_f(tax)} '
+            '(roads & public services upkeep)';
         _log(msg);
         state = gs.copyWith(
           players: gs.players.map((p) => p.id == cur.id
@@ -117,7 +123,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
       case TileType.surprise:
       case TileType.luckyWheel:
-        await _handleSurprise();
+        await _handleSurprise(dice);
 
       case TileType.bank:
         // Just trigger the bank event — UI opens bank panel
@@ -139,11 +145,18 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
   }
 
   // ── Surprise / Lucky Wheel ────────────────────────────────────────
-  Future<void> _handleSurprise() async {
+  // The event drawn — and its reward/penalty — scales with the exact dice
+  // number that brought the player onto the Surprise tile. Each dice face
+  // (1-6) maps to a pair of possible outcomes, escalating from mild,
+  // guaranteed-upside events on a low roll (1) to bigger risk on a high
+  // roll (6). A secondary coin-flip just picks which of that dice's two
+  // outcomes fires, so the same dice value still keeps some variety.
+  Future<void> _handleSurprise(int dice) async {
     if (state == null) return;
     final gs = state!;
     final p  = gs.currentPlayer;
-    final roll = _rng.nextInt(12);
+    final variant = _rng.nextInt(2); // 0 or 1 — flavor within the dice tier
+    final int roll = (((dice.clamp(1, 6) - 1) * 2 + variant)).clamp(0, 11).toInt();
     String msg;
     List<PlayerModel> players = List.from(gs.players);
 
@@ -201,7 +214,8 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
             pl.id == p.id ? pl.copyWith(skipNextTurn: true) : pl).toList();
     }
 
-    _log(msg);
+    final fullMsg = '🎲 Rolled a $dice → $msg';
+    _log(fullMsg);
 
     // Apply market crash to tiles
     List<TileModel> tiles = state!.tiles;
@@ -217,8 +231,8 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     state = state!.copyWith(
       players: players,
       tiles: tiles,
-      activityLog: [...state!.activityLog, msg],
-      eventMessage: msg,
+      activityLog: [...state!.activityLog, fullMsg],
+      eventMessage: fullMsg,
       lastEvent: GameEvent.landedOnSurprise,
     );
   }
@@ -342,53 +356,20 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       roundsPlayed += 1;
       log.add('📈 Round $roundsPlayed complete — properties appreciated!');
 
-      final purchasable = tiles.where((t) => t.isPurchasable);
-      final allSold = purchasable.isNotEmpty && purchasable.every((t) => t.isOwned);
-
-      // Game only starts counting down once every plot on the board has
-      // been bought. Before that, "End Game After" doesn't apply — with
-      // real plot prices, forcing an end at a fixed round could cut the
-      // game off while plots are still empty. Once everything is sold,
-      // the game runs for the configured number of extra rounds and then
-      // ends, with the win going to the highest net worth.
-      if (gs.phase != GamePhase.finalRound && allSold) {
-        log.add('🏁 All plots sold! Final ${gs.finalRoundsTotal} round(s) begin.');
+      // Game ends once the agreed number of rounds is reached — win goes to
+      // the highest net worth. This doesn't require every plot to be sold;
+      // with only 2 players and real plot prices that could take forever.
+      // Selling out early is still allowed and simply means more rent income
+      // for whoever bought, not an instant end.
+      if (roundsPlayed >= gs.finalRoundsTotal) {
+        log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
         state = gs.copyWith(
           tiles: tiles,
           activityLog: log,
           roundsPlayed: roundsPlayed,
-          currentPlayerIndex: gs.nextPlayerIndex,
-          phase: GamePhase.finalRound,
-          finalRoundsCurrent: 0,
-          lastEvent: GameEvent.none,
-          eventMessage: null,
-        );
-        return;
-      }
-
-      if (gs.phase == GamePhase.finalRound) {
-        final finalRoundsCurrent = gs.finalRoundsCurrent + 1;
-        if (finalRoundsCurrent >= gs.finalRoundsTotal) {
-          log.add('🏆 Game Over! Winner: ${gs.rankedPlayers.first.displayName}');
-          state = gs.copyWith(
-            tiles: tiles,
-            activityLog: log,
-            roundsPlayed: roundsPlayed,
-            finalRoundsCurrent: finalRoundsCurrent,
-            phase: GamePhase.ended,
-            lastEvent: GameEvent.gameEnded,
-            eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
-          );
-          return;
-        }
-        state = gs.copyWith(
-          tiles: tiles,
-          activityLog: log,
-          roundsPlayed: roundsPlayed,
-          currentPlayerIndex: gs.nextPlayerIndex,
-          finalRoundsCurrent: finalRoundsCurrent,
-          lastEvent: GameEvent.none,
-          eventMessage: null,
+          phase: GamePhase.ended,
+          lastEvent: GameEvent.gameEnded,
+          eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
         );
         return;
       }
@@ -401,21 +382,6 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       currentPlayerIndex: gs.nextPlayerIndex,
       lastEvent: GameEvent.none,
       eventMessage: null,
-    );
-  }
-
-  // ── Manual end (player-triggered, from the in-game menu) ───────────
-  void endGameNow() {
-    if (state == null) return;
-    final gs = state!;
-    if (gs.phase == GamePhase.ended) return;
-    final winner = gs.rankedPlayers.first.displayName;
-    final log = [...gs.activityLog, '🏆 Game ended by player. Winner: $winner'];
-    state = gs.copyWith(
-      activityLog: log,
-      phase: GamePhase.ended,
-      lastEvent: GameEvent.gameEnded,
-      eventMessage: '🏆 Game Over! $winner wins!',
     );
   }
 

@@ -20,7 +20,7 @@ class SetupGameScreen extends ConsumerStatefulWidget {
 class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
   int _boardSize = 25;
   int _playerCount = 2;
-  int _endRounds = 5;
+  int _endRounds = 15;
   bool _enableFarms = true;
   bool _enableSurprise = true;
   bool _enableLuckyWheel = true;
@@ -105,17 +105,7 @@ Navigator.of(context).push(
             _sectionTitle('Player Names'),
             _buildPlayerNameFields(),
             const SizedBox(height: 20),
-            _sectionTitle('Rounds After Sell-Out'),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Text(
-                'Once every plot on the board is bought, the game runs this many '
-                'more rounds and then ends — highest net worth wins. Selling out '
-                'early doesn\'t end the game early. You can also end the game '
-                'manually any time from the 🏁 button in-game.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.4),
-              ),
-            ),
+            _sectionTitle('End Game After'),
             _buildEndRoundSelector(),
             const SizedBox(height: 20),
             _sectionTitle('Game Features'),
@@ -267,25 +257,14 @@ Navigator.of(context).push(
                 ),
               ),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$r',
-                      style: TextStyle(
-                        color: selected ? Colors.white : AppColors.textSecondary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                      ),
-                    ),
-                    Text(
-                      'extra rounds',
-                      style: TextStyle(
-                        color: selected ? Colors.white70 : AppColors.textHint,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  '$r Rounds',
+                  style: TextStyle(
+                    color:
+                        selected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),

@@ -72,6 +72,19 @@ class _Card extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Row(children: [
+            // Traffic light: green for the active player's turn, red otherwise.
+            Container(
+              width: 9, height: 9,
+              margin: const EdgeInsets.only(right: 5),
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.success : AppColors.danger,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1),
+                boxShadow: [BoxShadow(
+                    color: (isActive ? AppColors.success : AppColors.danger).withValues(alpha: 0.8),
+                    blurRadius: isActive ? 6 : 2)],
+              ),
+            ),
             Container(
               width: 30, height: 30,
               decoration: BoxDecoration(

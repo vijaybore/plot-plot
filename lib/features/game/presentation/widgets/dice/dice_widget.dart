@@ -83,27 +83,26 @@ class _DiceWidgetState extends State<DiceWidget>
               duration: const Duration(milliseconds: 200),
               width: 52, height: 52,
               decoration: BoxDecoration(
-                gradient: const RadialGradient(
-                  center: Alignment(-0.35, -0.4),
-                  radius: 1.1,
-                  colors: [Colors.white, Color(0xFFE4E1D8)],
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [Colors.white, Color(0xFFF0EEE8)],
                 ),
                 borderRadius: BorderRadius.circular(11),
                 border: Border.all(
-                  color: widget.canRoll ? AppColors.glowCyan : const Color(0xFFCCCCCC),
+                  color: widget.canRoll ? AppColors.primary : const Color(0xFFCCCCCC),
                   width: widget.canRoll ? 2 : 1,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: widget.canRoll
-                        ? AppColors.glowCyan.withValues(alpha: 0.65)
-                        : Colors.black45,
-                    blurRadius: widget.canRoll ? 18 : 4,
+                        ? AppColors.primary.withValues(alpha: 0.6)
+                        : Colors.black26,
+                    blurRadius: widget.canRoll ? 16 : 4,
                     spreadRadius: widget.canRoll ? 2 : 0,
                   ),
                   const BoxShadow(
-                    color: Colors.black45,
-                    blurRadius: 6, offset: Offset(0, 3),
+                    color: Colors.black26,
+                    blurRadius: 4, offset: Offset(0, 2),
                   ),
                 ],
               ),
