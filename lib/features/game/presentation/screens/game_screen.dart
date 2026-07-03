@@ -167,6 +167,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
                   ),
                   onLogTap: _toggleLog,
                   highlightedTiles: gs.isMoving ? {cur.position} : const {},
+                  onTileTap: (tile) {
+                    // Tapping the Bank tile directly on the board opens
+                    // the same Bank Details sheet as tapping a player
+                    // card — one consistent entry point either way.
+                    if (tile.type == TileType.bank) _showBankSheet(gs);
+                  },
                 ),
               ),
             ),
@@ -1328,11 +1334,21 @@ class _BuySheetState extends State<_BuySheet> {
   final _nameCtrl  = TextEditingController();
   String _emoji    = '';
   String? _error;
+  late double _price;
+  late double _minPrice;
+  late double _maxPrice;
 
   @override
   void initState() {
     super.initState();
     _emoji = TileModel.suggestedEmojis(widget.tile.plotType).first;
+    final range = TileModel.priceRange(widget.tile.plotType);
+    _minPrice = range.$1;
+    _maxPrice = range.$2;
+    // Start at the old fixed-price point within the range — familiar
+    // anchor, but now fully adjustable by the player.
+    _price = TileModel.fixedPrice(widget.tile.plotType)
+        .clamp(_minPrice, _maxPrice).toDouble();
   }
 
   @override
@@ -1343,9 +1359,8 @@ class _BuySheetState extends State<_BuySheet> {
 
   @override
   Widget build(BuildContext context) {
-    final price   = widget.tile.price ?? TileModel.fixedPrice(widget.tile.plotType);
     final balance = widget.gs.currentPlayer.money;
-    final canAfford = balance >= price;
+    final canAfford = balance >= _price;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.80,
@@ -1388,7 +1403,7 @@ class _BuySheetState extends State<_BuySheet> {
                 const SizedBox(height: 3),
                 const Text('PURCHASE PLOT', style: TextStyle(
                   color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
-                Text('Bank price: ${_f(price)}',
+                Text('Price range: ${_f(_minPrice)} – ${_f(_maxPrice)}',
                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 10,
                       fontWeight: FontWeight.w700)),
               ]),
@@ -1440,9 +1455,12 @@ class _BuySheetState extends State<_BuySheet> {
                 onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 14),
-              // Fixed bank price — no negotiation, same for every player
+              // Player-driven price negotiation — pick anywhere in the
+              // plot's allowed range instead of a single locked price.
+              // Buying lower protects cash for future plots; buying
+              // higher raises this plot's resale/rent value faster.
               Row(children: [
-                const Text('Plot Price (₹)', style: TextStyle(
+                const Text('Your Offer (₹)', style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text('Your cash: ${_f(balance)}',
@@ -1457,14 +1475,40 @@ class _BuySheetState extends State<_BuySheet> {
                 decoration: BoxDecoration(
                   color: AppColors.appSurface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.appBorder),
+                  border: Border.all(
+                      color: canAfford ? AppColors.appBorder : AppColors.danger),
                 ),
-                child: Text(_f(price), style: const TextStyle(
-                  color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
+                child: Column(children: [
+                  Text(_f(_price), style: TextStyle(
+                    color: canAfford ? AppColors.accent : AppColors.danger,
+                    fontSize: 26, fontWeight: FontWeight.w900)),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: AppColors.accent,
+                      inactiveTrackColor: AppColors.appBorder,
+                      thumbColor: AppColors.accent,
+                      overlayColor: AppColors.accent.withValues(alpha: 0.2),
+                      trackHeight: 5,
+                    ),
+                    child: Slider(
+                      value: _price,
+                      min: _minPrice,
+                      max: _maxPrice,
+                      divisions: 20,
+                      onChanged: (v) => setState(() => _price = v),
+                    ),
+                  ),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text('Low: ${_f(_minPrice)}', style: const TextStyle(
+                        color: AppColors.textHint, fontSize: 10)),
+                    Text('High: ${_f(_maxPrice)}', style: const TextStyle(
+                        color: AppColors.textHint, fontSize: 10)),
+                  ]),
+                ]),
               ),
               if (!canAfford) ...[
                 const SizedBox(height: 8),
-                const Text('❌ Insufficient funds for this plot',
+                const Text('❌ Slide left — this offer is above your cash on hand',
                   style: TextStyle(color: AppColors.danger, fontSize: 12)),
               ],
               if (_error != null) ...[
@@ -1482,7 +1526,7 @@ class _BuySheetState extends State<_BuySheet> {
                       return;
                     }
                     Navigator.pop(context);
-                    widget.onBuy(name, price, _emoji);
+                    widget.onBuy(name, _price, _emoji);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
@@ -1734,28 +1778,28 @@ class _RulesSheet extends StatelessWidget {
         Expanded(child: ListView(controller: ctrl,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           children: const [
-            _RuleSection('🎯 Objective',
-              'Build the richest real-estate empire by buying, naming, and developing plots in the township. The player with the highest Net Worth when all plots are sold wins!'),
-            _RuleSection('🎲 Taking a Turn',
-              'Tap the Dice button to roll. Your token moves forward through the lanes. Land on a plot to buy it, pay rent, or trigger a special event.'),
+            _RuleSection('🎯 Goal',
+              'Buy plots, grow their value, and end the game with the most money. Money = your cash + bank savings + everything your plots are worth, minus any loans.'),
+            _RuleSection('🎲 Your Turn',
+              'Tap the dice to roll. Your token moves forward that many spaces. Whatever you land on decides what happens next — buy it, pay rent, or trigger a surprise.'),
             _RuleSection('🏠 Buying a Plot',
-              'When you land on an unclaimed plot:\n• Enter your custom plot name\n• Choose an icon/emoji\n• Set your purchase price within the market range\n• Tap CONFIRM to purchase\n\nIf you can\'t afford it, you\'ll see "Insufficient Funds".'),
+              'Land on an empty plot and you can buy it:\n• Give it a name\n• Pick an icon\n• Drag the slider to set your price — anywhere in the plot\'s price range\n• Tap Confirm\n\nLower price = more cash left for your next plot. Higher price = this plot is worth more later. Not enough cash and the Confirm button won\'t let you through.'),
             _RuleSection('💰 Rent',
-              'If you land on another player\'s plot, you pay them 8% of their purchase price as rent. Owning multiple adjacent plots may increase rent in future updates.'),
-            _RuleSection('📈 Appreciation',
-              'At the end of each full round, all owned properties appreciate in value:\n• Farm: +1%\n• Residential: +2%\n• Commercial: +4%\n• Highway/Premium: +5-6%\n\nThis increases your Net Worth over time.'),
+              'Land on someone else\'s plot and you pay them 8% of what they paid for it.'),
+            _RuleSection('📈 Prices Go Up Over Time',
+              'After every full round, all owned plots quietly gain value:\n• Farms: +1%\n• Homes: +2%\n• Shops: +4%\n• Highway & premium plots: +5–6%\n\nHang onto plots and they grow — that\'s free money over time.'),
             _RuleSection('🌾 Farm Income',
-              'Farm plots generate ₹2L passive income per round. Owning more farms means steady cash flow every round.'),
-            _RuleSection('🎁 Surprise Events',
-              'Landing on a Surprise or Lucky tile triggers a random event:\n✅ Positive: Lottery (₹10L), Grant (₹15L), Harvest (₹5L)\n❌ Negative: Tax Audit (-10%), Storm Damage (-7%), Maintenance (-₹3L)\n⚡ Special: Shield, Extra Turn, Move Back'),
-            _RuleSection('🎲6️⃣ Lucky Six Rule',
-              'Roll exactly a 6 and land on a Surprise tile → that player automatically skips their next turn (no random chance — this one is guaranteed).\n\nBecause turns pass in order, this means the other player gets to take their turn, then — since the six-roller\'s turn is skipped — immediately takes another turn right after. In a 2-player game that\'s two turns in a row for your opponent before play comes back to you.'),
-            _RuleSection('🏦 Banking',
-              'Tap any player card to open the Bank:\n• Deposit cash → earn safety\n• Withdraw → get cash back\n• Take Loan → instant cash (repay with 5% interest)\n• Transfer money to another player'),
+              'Own a farm? It pays you ₹2L every round, automatically. More farms = more steady income.'),
+            _RuleSection('🎁 Surprise Tiles',
+              'Land on a Surprise or Lucky tile and something random happens — a detail card pops up showing exactly what:\n✅ Good: cash bonus, grant, harvest payout\n❌ Bad: tax hit, storm damage, repair bill\n⚡ Other: a Shield, an extra turn, or getting moved back'),
+            _RuleSection('🎲6️⃣ Roll a 6, Land on Surprise',
+              'This one\'s guaranteed, not random: roll exactly a 6 and land on Surprise, and you skip your next turn.\n\nSince turns go in order, this means your opponent plays their normal turn — then plays again right away, because yours got skipped. So in a 2-player game, they effectively get two turns in a row before it\'s your turn again.'),
+            _RuleSection('🏦 The Bank',
+              'Tap the Bank tile on the board, or tap any player\'s card, to open it. From there you can:\n• Deposit cash to keep it safe\n• Withdraw cash back out\n• Take a loan for instant cash (pay it back with 5% interest)\n• Send money to another player'),
             _RuleSection('🛡️ Shield',
-              'A Shield blocks the next rent payment. You\'ll need to pay rent again the following time you land on an owned plot.'),
-            _RuleSection('🏆 Winning',
-              'When all purchasable plots are sold, the game ends. Net Worth = Cash + Bank Balance + Total Property Value − Loans.\n\nThe player with the highest Net Worth wins!'),
+              'A Shield saves you from paying rent one time. The very next time you\'d owe rent, you pay nothing — then the Shield is used up.'),
+            _RuleSection('🏆 How the Game Ends',
+              'Once every plot on the board has been bought, the game is over. Whoever has the highest total money — cash, bank savings, and plot values combined, minus loans — wins.'),
           ],
         )),
       ]),

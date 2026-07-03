@@ -4,13 +4,14 @@ import '../../../../../features/game/domain/models/tile_model.dart';
 import '../../../../../features/game/domain/models/player_model.dart';
 import 'board_tile_widget.dart';
 
-class GameBoardWidget extends StatelessWidget {
+class GameBoardWidget extends StatefulWidget {
   final List<TileModel> tiles;
   final List<PlayerModel> players;
   final Widget centerWidget;          // dice area shown in header
   final VoidCallback? onLogTap;
   final Set<int> highlightedTiles;    // positions being traversed (animation)
   final String? currentPlayerId;      // whose turn it is — for traffic light
+  final void Function(TileModel)? onTileTap;
 
   const GameBoardWidget({
     super.key,
@@ -21,10 +22,53 @@ class GameBoardWidget extends StatelessWidget {
     this.onLogTap,
     this.highlightedTiles = const {},
     this.currentPlayerId,
+    this.onTileTap,
   });
 
   @override
+  State<GameBoardWidget> createState() => _GameBoardWidgetState();
+}
+
+class _GameBoardWidgetState extends State<GameBoardWidget> {
+  final GlobalKey _activeTileKey = GlobalKey();
+  int? _lastCenteredPosition;
+
+  // Automatic camera pan: whenever the active player's board position
+  // changes (their turn starts / they move), smoothly scroll both the
+  // lane's horizontal strip and the board's vertical list so their tile
+  // is brought into view without the user having to hunt for it.
+  void _panToActiveTileIfNeeded(int? position) {
+    if (position == null || position == _lastCenteredPosition) return;
+    _lastCenteredPosition = position;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _activeTileKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final tiles = widget.tiles;
+    final players = widget.players;
+    final centerWidget = widget.centerWidget;
+    final onLogTap = widget.onLogTap;
+    final highlightedTiles = widget.highlightedTiles;
+    final currentPlayerId = widget.currentPlayerId;
+
+    int? currentPosition;
+    if (currentPlayerId != null) {
+      final matches = players.where((p) => p.id == currentPlayerId);
+      currentPosition = matches.isEmpty ? null : matches.first.position;
+    }
+    _panToActiveTileIfNeeded(currentPosition);
+
     final Map<int, List<TileModel>> byLane = {};
     for (final t in tiles) {
       (byLane[t.lane] ??= []).add(t);
@@ -69,6 +113,9 @@ class GameBoardWidget extends StatelessWidget {
                       isLast: ln == laneNums.last,
                       highlightedTiles: highlightedTiles,
                       currentPlayerId: currentPlayerId,
+                      activeTileKey: _activeTileKey,
+                      activeTilePosition: currentPosition,
+                      onTileTap: widget.onTileTap,
                     )),
                     const SizedBox(height: 6),
                   ],
@@ -82,7 +129,7 @@ class GameBoardWidget extends StatelessWidget {
   }
 
   List<PlayerModel> _playersAt(int idx) =>
-      players.where((p) => p.position == idx).toList();
+      widget.players.where((p) => p.position == idx).toList();
 }
 
 // ── Main Road Header ──────────────────────────────────────────────────────────
@@ -102,7 +149,7 @@ class _MainRoadHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 80,
+      height: 92,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
@@ -186,54 +233,22 @@ class _MainRoadHeader extends StatelessWidget {
 
           // GO tile
           _GoTile(),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
 
-          // Dice area (compact)
+          // Dice area (compact) — tall enough for the dice PLUS the
+          // END / action label that appears underneath it once an event
+          // resolves. The old fixed 58×58 box was too short for that
+          // second line, which is exactly what produced the
+          // "BOTTOM OVERFLOWED" warning under the LOG button.
           SizedBox(
             width: 58,
-            height: 58,
+            height: 76,
             child: diceWidget,
           ),
-          const SizedBox(width: 6),
-
-          // LOG button
-          GestureDetector(
-            onTap: onLogTap,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00897B), Color(0xFF00D4AA)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.secondary, width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.secondary.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('📋', style: TextStyle(fontSize: 16)),
-                  SizedBox(height: 1),
-                  Text('LOG',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5)),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(width: 10),
+          // NOTE: the LOG button used to be duplicated here AND in the
+          // top app bar. There is now exactly one Log button — the
+          // high-contrast teal one in the top-right app header.
         ],
       ),
     );
@@ -285,6 +300,9 @@ class _LaneSection extends StatelessWidget {
   final bool isLast;
   final Set<int> highlightedTiles;
   final String? currentPlayerId;
+  final GlobalKey? activeTileKey;
+  final int? activeTilePosition;
+  final void Function(TileModel)? onTileTap;
 
   const _LaneSection({
     required this.laneNumber,
@@ -293,6 +311,9 @@ class _LaneSection extends StatelessWidget {
     required this.isLast,
     required this.highlightedTiles,
     this.currentPlayerId,
+    this.activeTileKey,
+    this.activeTilePosition,
+    this.onTileTap,
   });
 
   @override
@@ -301,6 +322,7 @@ class _LaneSection extends StatelessWidget {
     children: [
       _header(),
       _tileRow(),
+      if (!isLast) _road(),
     ],
   );
 
@@ -364,7 +386,7 @@ class _LaneSection extends StatelessWidget {
           final onTile = allPlayers
               .where((p) => p.position == tile.index)
               .toList();
-          return PlotTileCard(
+          final card = PlotTileCard(
             tile: tile,
             players: onTile,
             allPlayers: allPlayers,
@@ -372,9 +394,56 @@ class _LaneSection extends StatelessWidget {
             width: 110,
             height: 130,
             currentPlayerId: currentPlayerId,
+            onTap: onTileTap == null ? null : () => onTileTap!(tile),
           );
+          // Tag the active player's current tile so the board can
+          // auto-scroll (both lanes + horizontal strip) to bring it
+          // into view the moment their turn starts.
+          if (activeTilePosition != null && tile.index == activeTilePosition) {
+            return KeyedSubtree(key: activeTileKey, child: card);
+          }
+          return card;
         }).toList(),
       ),
+    ),
+  );
+
+  Widget _road() => Container(
+    height: 24,
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Color(0xFFD4C9B0), Color(0xFFC5B99A), Color(0xFFD4C9B0)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ),
+    ),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(14, (i) => Container(
+            width: 14, height: 2.5,
+            color: Colors.white.withValues(alpha: 0.45),
+          )),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text(
+            'INTERNAL ROAD',
+            style: TextStyle(
+              color: Color(0xFF6D5B3B),
+              fontSize: 7,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.8,
+            ),
+          ),
+        ),
+      ],
     ),
   );
 

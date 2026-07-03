@@ -11,6 +11,7 @@ class PlotTileCard extends StatefulWidget {
   final double height;
   final bool isHighlighted; // for movement animation
   final String? currentPlayerId; // whose turn — shows the traffic light
+  final VoidCallback? onTap;
 
   const PlotTileCard({
     super.key,
@@ -21,6 +22,7 @@ class PlotTileCard extends StatefulWidget {
     this.height = 130,
     this.isHighlighted = false,
     this.currentPlayerId,
+    this.onTap,
   });
 
   @override
@@ -50,7 +52,9 @@ class _PlotTileCardState extends State<PlotTileCard>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedBuilder(
       animation: _glowAnim,
       builder: (_, _) => Container(
         width: widget.width,
@@ -87,6 +91,7 @@ class _PlotTileCardState extends State<PlotTileCard>
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -284,23 +289,23 @@ class _PlotTileCardState extends State<PlotTileCard>
   // Clean 3D-stylized letter badges — no floating heads / full bodies.
   // The active player's token gets a small traffic-light marker beside it
   // to show whose turn it is right there on the board.
+  // Wrap (not Row) so multiple tokens on a tight ~110px-wide tile can
+  // never throw a RenderFlex overflow — they simply wrap to a 2nd line.
   Widget _playerTokens() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5, left: 3, right: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.only(bottom: 4, left: 3, right: 3),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 2,
+        runSpacing: 2,
         children: widget.players.take(4).expand((p) {
           final isCurrent = widget.currentPlayerId != null &&
               p.id == widget.currentPlayerId;
           return [
-            if (isCurrent) ...[
-              const _TrafficLight3D(),
-              const SizedBox(width: 2),
-            ],
+            _TrafficLight3D(active: isCurrent),
             _Token3D(letter: p.displayName.isNotEmpty
                 ? p.displayName.substring(0, 1).toUpperCase() : '?',
                 color: p.color),
-            const SizedBox(width: 3),
           ];
         }).toList(),
       ),
@@ -309,6 +314,11 @@ class _PlotTileCardState extends State<PlotTileCard>
 
   // ── Helpers ───────────────────────────────────────────────────────
   String _unownedEmoji() {
+    // P-002–P-004 stay visually clean with no default icon (P-001 keeps
+    // its usual corner icon) — matches the requested "icon clean-up".
+    if (const ['P-002', 'P-003', 'P-004'].contains(widget.tile.plotNumber)) {
+      return '';
+    }
     switch (widget.tile.plotType) {
       case PlotType.farm:          return '🌾';
       case PlotType.commercial:    return '🏪';
@@ -329,11 +339,18 @@ class _PlotTileCardState extends State<PlotTileCard>
     if (widget.tile.type == TileType.luckyWheel) return const Color(0xFFFFFDE7);
     if (widget.tile.type == TileType.tax)        return const Color(0xFFFFEBEE);
     if (widget.tile.type == TileType.bank)       return const Color(0xFFE3F2FD);
+    // P-001–P-004 get a uniform light-cyan tint that matches the Bank
+    // tile, replacing their normal per-type color for this stretch of
+    // Lane 1 specifically.
+    if (_isFeaturedPlot) return const Color(0xFFE3F2FD);
     if (widget.tile.isOwned) {
       return widget.tile.plotTypeColor.withValues(alpha: 0.88);
     }
     return widget.tile.plotTypeColor.withValues(alpha: 0.28);
   }
+
+  bool get _isFeaturedPlot => const ['P-001', 'P-002', 'P-003', 'P-004']
+      .contains(widget.tile.plotNumber);
 
   Color _ownerColor() {
     final owner = widget.allPlayers
@@ -390,9 +407,12 @@ class _Token3D extends StatelessWidget {
   );
 }
 
-// ── 3D traffic light — marks whose turn it is, right on the board ──────────
+// ── 3D traffic light — green for whoever's turn it is, steady red for
+// whoever is waiting — right on the board next to each token, matching
+// how a physical board game would mark active vs. passive players.
 class _TrafficLight3D extends StatelessWidget {
-  const _TrafficLight3D();
+  final bool active;
+  const _TrafficLight3D({required this.active});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -411,9 +431,9 @@ class _TrafficLight3D extends StatelessWidget {
     child: Column(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _bulb(const Color(0xFFE53935), lit: false),
+        _bulb(const Color(0xFFE53935), lit: !active), // red = waiting
         _bulb(const Color(0xFFFFC107), lit: false),
-        _bulb(const Color(0xFF43A047), lit: true), // green = your turn
+        _bulb(const Color(0xFF43A047), lit: active),  // green = your turn
       ],
     ),
   );
