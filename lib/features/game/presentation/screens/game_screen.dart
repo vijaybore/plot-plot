@@ -663,7 +663,7 @@ class _PlayerStrip extends StatelessWidget {
           ? Row(children: [
               Expanded(child: cards[0]),
               const SizedBox(width: 8),
-              BottomBarDice(color: Theme.of(context).primaryColor),
+             BottomBarDice(color: Theme.of(context).primaryColor),
               const SizedBox(width: 8),
               Expanded(child: cards[1]),
             ])
