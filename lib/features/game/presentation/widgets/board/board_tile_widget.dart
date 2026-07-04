@@ -83,12 +83,35 @@ class _PlotTileCardState extends State<PlotTileCard>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          child: Column(
-            children: [
-              _topStrip(),
-              Expanded(child: _body()),
-              if (widget.players.isNotEmpty) _playerTokens(),
-            ],
+          // Everything below used to rely on hand-budgeted pixel heights
+          // (a fixed top strip + an Expanded body + a fixed token row all
+          // having to add up to exactly widget.height). Any small mismatch
+          // — a longer plot label, a font metrics difference between
+          // platforms, an extra wrapped line — threw a hard RenderFlex
+          // overflow. FittedBox removes that failure mode entirely: the
+          // content is measured at its natural (intrinsic) size and then
+          // scaled to fit the tile exactly. If it already fits, scale is
+          // 1.0 and nothing looks different. If it doesn't, it shrinks
+          // uniformly instead of throwing the "OVERFLOWED BY n PIXELS"
+          // banner — there is no code path left that can overflow here.
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: widget.width,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _topStrip(),
+                    _body(),
+                    if (widget.players.isNotEmpty) _playerTokens(),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -125,19 +148,23 @@ class _PlotTileCardState extends State<PlotTileCard>
     return Padding(
       padding: const EdgeInsets.fromLTRB(5, 4, 5, 3),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Row 1: plot number + type badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                t.plotNumber,
-                style: const TextStyle(
-                  color: Color(0xFF555555),
-                  fontSize: 7.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
+              Flexible(
+                child: Text(
+                  t.plotNumber,
+                  style: const TextStyle(
+                    color: Color(0xFF555555),
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
@@ -163,8 +190,12 @@ class _PlotTileCardState extends State<PlotTileCard>
 
           const SizedBox(height: 4),
 
-          // Row 2: big emoji / building image
-          Expanded(
+          // Row 2: big emoji / building image — fixed-height slot instead
+          // of Expanded, since this Column is now intrinsically sized
+          // (mainAxisSize.min) inside the outer FittedBox rather than
+          // stretched to fill a flex parent.
+          SizedBox(
+            height: 34,
             child: Center(
               child: Text(
                 t.isOwned ? t.displayEmoji : _unownedEmoji(),

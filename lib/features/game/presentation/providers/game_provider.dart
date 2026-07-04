@@ -82,7 +82,13 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     if (passedGo) {
       msg = '🏠 ${cur.displayName} passed GO! Collected ${_f(salary)}';
     } else {
-      msg = '🎲 ${cur.displayName} rolled $dice → landed on ${landedTile.displayName}';
+      // landedTile.displayName is a real pre-generated flavor name (e.g.
+      // "Oak Lane") — not a placeholder — but the board only ever shows
+      // the plot number ("P-002"), never the flavor name on its own. That
+      // made the banner untraceable back to a specific tile. Showing both
+      // fixes it without losing the flavor naming.
+      msg = '🎲 ${cur.displayName} rolled $dice → landed on '
+          '${landedTile.plotNumber} (${landedTile.displayName})';
     }
     _log(msg);
 

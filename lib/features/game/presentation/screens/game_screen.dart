@@ -597,16 +597,17 @@ class _DiceArea extends StatelessWidget {
     ]);
   }
 
-  Widget _actionRow() => Column(mainAxisAlignment: MainAxisAlignment.center,
+  Widget _actionRow() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
     children: [
       if (_showBuy) ...[
-        _btn('BUY', AppColors.success, onBuy),
-        const SizedBox(height: 4),
-        _btn('SKIP', AppColors.appCard, onSkip, txtColor: AppColors.textSecondary),
+        Expanded(child: _btn('BUY', AppColors.success, onBuy)),
+        const SizedBox(width: 6),
+        Expanded(child: _btn('SKIP', AppColors.appCard, onSkip, txtColor: AppColors.textSecondary)),
       ] else if (_showRename) ...[
-        _btn('RENAME', AppColors.accent, onRename, txtColor: Colors.black),
-        const SizedBox(height: 4),
-        _btn('END', AppColors.primary, onEndTurn),
+        Expanded(child: _btn('RENAME', AppColors.accent, onRename, txtColor: Colors.black)),
+        const SizedBox(width: 6),
+        Expanded(child: _btn('END', AppColors.primary, onEndTurn)),
       ],
     ],
   );
@@ -616,7 +617,8 @@ class _DiceArea extends StatelessWidget {
     GestureDetector(
       onTap: fn,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: color, borderRadius: BorderRadius.circular(8),
           boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)],

@@ -235,13 +235,13 @@ class _MainRoadHeader extends StatelessWidget {
           _GoTile(),
           const SizedBox(width: 8),
 
-          // Dice area (compact) — tall enough for the dice PLUS the
-          // END / action label that appears underneath it once an event
-          // resolves. The old fixed 58×58 box was too short for that
-          // second line, which is exactly what produced the
-          // "BOTTOM OVERFLOWED" warning under the LOG button.
+          // Dice area — wide enough for either the single dice icon OR,
+          // once a player lands and BUY/SKIP (or RENAME/END) appear, a
+          // proper side-by-side button row instead of a cramped vertical
+          // stack. Was 58px wide, which could only ever fit one button
+          // per line; 132px gives two real tap targets room to breathe.
           SizedBox(
-            width: 58,
+            width: 132,
             height: 76,
             child: diceWidget,
           ),
