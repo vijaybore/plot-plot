@@ -284,7 +284,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _BankSheet(
-        gs: gs,
+        playerId: gs.currentPlayer.id,
         onDeposit: (id, amt) =>
             ref.read(gameProvider.notifier).depositToBank(id, amt),
         onWithdraw: (id, amt) =>
@@ -648,7 +648,7 @@ class _PlayerStrip extends StatelessWidget {
     )).toList();
 
     return Container(
-      height: 118,
+      height: 122, // was 118 — bumped to match _PlayerCard's new 106px height
       decoration: const BoxDecoration(
         // Dark bottom control bar
         color: Color(0xFF14141F),
@@ -732,8 +732,11 @@ class _PlayerCardState extends State<_PlayerCard>
           // layout relied on a Spacer() inside a too-short box, which is
           // exactly what produced "BOTTOM OVERFLOWED" in debug builds
           // whenever the optional Loan row appeared. Giving every row a
-          // fixed slot (no Spacer) guarantees it always fits.
-          height: 102,
+          // fixed slot (no Spacer) guarantees it always fits. Bumped from
+          // 102 → 106: the pulsing-border version added slightly heavier
+          // shadow/border painting that was tipping this over by 1px on
+          // some players (the "BOTTOM OVERFLOWED BY 1.00 PIXELS" strip).
+          height: 106,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             // Uniform dark navy background whether resting or active —
@@ -1039,30 +1042,39 @@ class _StatGrid extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Bank Sheet
 // ─────────────────────────────────────────────────────────────────────────────
-class _BankSheet extends StatefulWidget {
-  final GameStateModel gs;
+class _BankSheet extends ConsumerStatefulWidget {
+  final String playerId;
   final void Function(String, double) onDeposit;
   final void Function(String, double) onWithdraw;
   final void Function(String, double) onLoan;
   final void Function(String, double) onRepay;
   final void Function(String, String, double) onTransfer;
 
-  const _BankSheet({required this.gs, required this.onDeposit,
+  const _BankSheet({required this.playerId, required this.onDeposit,
     required this.onWithdraw, required this.onLoan,
     required this.onRepay, required this.onTransfer});
 
   @override
-  State<_BankSheet> createState() => _BankSheetState();
+  ConsumerState<_BankSheet> createState() => _BankSheetState();
 }
 
-class _BankSheetState extends State<_BankSheet>
+class _BankSheetState extends ConsumerState<_BankSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
   final _amtCtrl = TextEditingController();
   String? _selectedTransferTarget;
   String? _error;
 
-  PlayerModel get _me => widget.gs.currentPlayer;
+  // Live game state — re-read every time this sheet rebuilds (via
+  // ref.watch inside build(), see below) so balances always reflect the
+  // latest player data, even if it changes while the sheet stays open.
+  // This is what fixed the "Bank modal shows stale Cash" bug: the old
+  // version captured a GameStateModel once at the moment the sheet was
+  // opened and never looked at the provider again.
+  late GameStateModel _gs;
+  PlayerModel get _me =>
+      _gs.players.firstWhere((p) => p.id == widget.playerId,
+          orElse: () => _gs.currentPlayer);
 
   @override
   void initState() {
@@ -1080,7 +1092,9 @@ class _BankSheetState extends State<_BankSheet>
   double get _amt => double.tryParse(_amtCtrl.text) ?? 0;
 
   @override
-  Widget build(BuildContext context) => DraggableScrollableSheet(
+  Widget build(BuildContext context) {
+    _gs = ref.watch(gameProvider)!;
+    return DraggableScrollableSheet(
     initialChildSize: 0.72,
     maxChildSize: 0.92,
     builder: (_, ctrl) => Container(
@@ -1179,6 +1193,7 @@ class _BankSheetState extends State<_BankSheet>
       ]),
     ),
   );
+  }
 
   Widget _bal(String label, String value, Color c) => Column(
     mainAxisSize: MainAxisSize.min,
@@ -1266,7 +1281,7 @@ class _BankSheetState extends State<_BankSheet>
   ]);
 
   Widget _transferView() {
-    final others = widget.gs.players.where((p) => p.id != _me.id).toList();
+    final others = _gs.players.where((p) => p.id != _me.id).toList();
     return ListView(padding: const EdgeInsets.all(20), children: [
       const Text('Transfer Cash to Player', style: TextStyle(color: Colors.white70, fontSize: 13)),
       const SizedBox(height: 12),

@@ -304,7 +304,12 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     if (player.money < price) return;
 
     final name = customName.trim().isEmpty ? tile.name : customName.trim();
-    final msg  = '🏠 ${player.displayName} bought "$name" for ${_f(price)}';
+    // Include the plot number (e.g. "P-001") alongside the custom name.
+    // Without it, a plot renamed to something like "v" reads as "A bought
+    // 'v'" — indistinguishable from "A bought player V" in the activity
+    // feed. The plot number disambiguates it from any player name.
+    final msg  = '🏠 ${player.displayName} purchased "$name" '
+        '(${tile.plotNumber}) for ${_f(price)}';
     _log(msg);
 
     state = gs.copyWith(
