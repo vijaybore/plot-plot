@@ -226,7 +226,8 @@ class _FloatingDiceButtonState extends State<FloatingDiceButton>
 //  Faces shown: TOP = 1 pip, LEFT side = 3 pips, RIGHT side = 2 pips.
 // ─────────────────────────────────────────────────────────────────────────────
 class BottomBarDice extends StatefulWidget {
-  const BottomBarDice({super.key});
+  final Color color;
+  const BottomBarDice({super.key, required this.color});
 
   @override
   State<BottomBarDice> createState() => _BottomBarDiceState();
@@ -258,13 +259,16 @@ class _BottomBarDiceState extends State<BottomBarDice>
       child: SizedBox(
         width: 46,
         height: 50,
-        child: CustomPaint(painter: _IsoDiePainter()),
+        child: CustomPaint(painter: _IsoDiePainter(widget.color)),
       ),
     );
   }
 }
 
 class _IsoDiePainter extends CustomPainter {
+  final Color playerColor;
+  _IsoDiePainter(this.playerColor);
+
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
@@ -287,6 +291,17 @@ class _IsoDiePainter extends CustomPainter {
       shadowPaint,
     );
 
+    // Face tones are now derived from the current player's color instead
+    // of a fixed cream/ivory palette — top face lightest (closest to
+    // playerColor tinted with white), left mid-tone, right darkest —
+    // same light-direction logic as before, just re-colored per player.
+    final topFace   = Color.lerp(playerColor, Colors.white, 0.55)!;
+    final leftFace  = Color.lerp(playerColor, Colors.white, 0.25)!;
+    final rightFace = Color.lerp(playerColor, Colors.black, 0.20)!;
+    final topStroke   = Color.lerp(playerColor, Colors.black, 0.15)!;
+    final leftStroke  = Color.lerp(playerColor, Colors.black, 0.35)!;
+    final rightStroke = Color.lerp(playerColor, Colors.black, 0.55)!;
+
     // TOP face (lightest — catches the light) — shows 1 pip
     final topPath = Path()
       ..moveTo(top.dx, top.dy)
@@ -294,9 +309,9 @@ class _IsoDiePainter extends CustomPainter {
       ..lineTo(center.dx, center.dy)
       ..lineTo(left.dx, left.dy)
       ..close();
-    canvas.drawPath(topPath, Paint()..color = const Color(0xFFFDFDF7));
+    canvas.drawPath(topPath, Paint()..color = topFace);
     canvas.drawPath(topPath, Paint()
-      ..color = const Color(0xFFCFCABF)
+      ..color = topStroke
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1);
     _pip(canvas, Offset(cx, h * 0.27), 2.6);
@@ -308,9 +323,9 @@ class _IsoDiePainter extends CustomPainter {
       ..lineTo(bottomC.dx, bottomC.dy)
       ..lineTo(bottomL.dx, bottomL.dy)
       ..close();
-    canvas.drawPath(leftPath, Paint()..color = const Color(0xFFE3DECF));
+    canvas.drawPath(leftPath, Paint()..color = leftFace);
     canvas.drawPath(leftPath, Paint()
-      ..color = const Color(0xFFB8B2A0)
+      ..color = leftStroke
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1);
     final lc = Offset((left.dx + center.dx + bottomC.dx + bottomL.dx) / 4,
@@ -326,9 +341,9 @@ class _IsoDiePainter extends CustomPainter {
       ..lineTo(bottomC.dx, bottomC.dy)
       ..lineTo(center.dx, center.dy)
       ..close();
-    canvas.drawPath(rightPath, Paint()..color = const Color(0xFFC9C3B2));
+    canvas.drawPath(rightPath, Paint()..color = rightFace);
     canvas.drawPath(rightPath, Paint()
-      ..color = const Color(0xFF9C9686)
+      ..color = rightStroke
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1);
     final rc = Offset((right.dx + bottomR.dx + bottomC.dx + center.dx) / 4,
@@ -340,11 +355,12 @@ class _IsoDiePainter extends CustomPainter {
   void _pip(Canvas canvas, Offset o, double r) {
     canvas.drawCircle(o.translate(0.4, 0.5), r,
         Paint()..color = Colors.black.withValues(alpha: 0.35));
-    canvas.drawCircle(o, r, Paint()..color = const Color(0xFF2A2A2A));
+    canvas.drawCircle(o, r, Paint()..color = Colors.white);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _IsoDiePainter oldDelegate) =>
+      oldDelegate.playerColor != playerColor;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

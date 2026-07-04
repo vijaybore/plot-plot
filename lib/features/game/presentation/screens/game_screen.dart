@@ -656,14 +656,14 @@ class _PlayerStrip extends StatelessWidget {
         color: Color(0xFF14141F),
         border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: gs.players.length == 2
           // 2-player layout: token box — 3D dice — token box, dice centered
           // in the middle of the bottom bar as its own focal element.
           ? Row(children: [
               Expanded(child: cards[0]),
               const SizedBox(width: 8),
-              const BottomBarDice(),
+              BottomBarDice(color: Theme.of(context).primaryColor),
               const SizedBox(width: 8),
               Expanded(child: cards[1]),
             ])
@@ -672,7 +672,7 @@ class _PlayerStrip extends StatelessWidget {
               children: [
                 SizedBox(width: 155, child: cards[0]),
                 const SizedBox(width: 8),
-                const BottomBarDice(),
+                BottomBarDice(color: Theme.of(context).primaryColor),
                 const SizedBox(width: 8),
                 for (final c in cards.skip(1))
                   Padding(
