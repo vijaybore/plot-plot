@@ -29,6 +29,11 @@ class TileModel extends Equatable {
   final int positionInLane;
   final String plotNumber;    // "P-001" — permanent
   final PlotType plotType;
+  final double? purchasePrice; // what the CURRENT owner actually paid —
+                                // separate from `price`, which keeps
+                                // drifting via appreciation/inflation, so
+                                // "bought for ₹X" in the plot details sheet
+                                // stays accurate even years into the game.
 
   const TileModel({
     required this.index,
@@ -43,6 +48,7 @@ class TileModel extends Equatable {
     required this.positionInLane,
     required this.plotNumber,
     this.plotType = PlotType.residential,
+    this.purchasePrice,
   });
 
   bool get isOwned => ownerId != null;
@@ -154,16 +160,16 @@ class TileModel extends Equatable {
   // like Ludo squares are fixed positions with fixed rules.
   static double fixedPrice(PlotType type) {
     switch (type) {
-      case PlotType.farm:         return 800000;   // 8L  — cheapest, income plot
-      case PlotType.residential:  return 1200000;  // 12L
-      case PlotType.garden:       return 1500000;  // 15L
-      case PlotType.corner:       return 1800000;  // 18L — corner premium
-      case PlotType.industrial:   return 2000000;  // 20L
+      case PlotType.farm:         return 600000;   // 6L - cheapest, income plot
+      case PlotType.residential:  return 900000;   // 9L
+      case PlotType.garden:       return 1200000;  // 12L - top of entry tier
+      case PlotType.corner:       return 1500000;  // 15L - corner premium
+      case PlotType.industrial:   return 1800000;  // 18L
       case PlotType.highwayFacing:return 2000000;  // 20L
       case PlotType.commercial:   return 2500000;  // 25L
-      case PlotType.lakeView:     return 2800000;  // 28L
-      case PlotType.premium:      return 3200000;  // 32L
-      case PlotType.luxury:       return 4000000;  // 40L
+      case PlotType.lakeView:     return 3000000;  // 30L
+      case PlotType.premium:      return 3800000;  // 38L
+      case PlotType.luxury:       return 5000000;  // 50L - high-tier ceiling
     }
   }
 
@@ -209,20 +215,23 @@ class TileModel extends Equatable {
     String? customName,
     String? customEmoji,
     bool clearCustomName = false,
+    double? purchasePrice,
+    bool clearOwnership = false,
   }) {
     return TileModel(
       index: index,
       type: type,
       name: name,
       price: price ?? this.price,
-      ownerId: ownerId ?? this.ownerId,
-      upgradeLevel: upgradeLevel ?? this.upgradeLevel,
-      customName: clearCustomName ? null : (customName ?? this.customName),
-      customEmoji: customEmoji ?? this.customEmoji,
+      ownerId: clearOwnership ? null : (ownerId ?? this.ownerId),
+      upgradeLevel: clearOwnership ? 1 : (upgradeLevel ?? this.upgradeLevel),
+      customName: clearOwnership || clearCustomName ? null : (customName ?? this.customName),
+      customEmoji: clearOwnership ? null : (customEmoji ?? this.customEmoji),
       lane: lane,
       positionInLane: positionInLane,
       plotNumber: plotNumber,
       plotType: plotType,
+      purchasePrice: clearOwnership ? null : (purchasePrice ?? this.purchasePrice),
     );
   }
 
@@ -239,6 +248,7 @@ class TileModel extends Equatable {
     'positionInLane': positionInLane,
     'plotNumber': plotNumber,
     'plotType': plotType.name,
+    'purchasePrice': purchasePrice,
   };
 
   factory TileModel.fromMap(Map<String, dynamic> map) => TileModel(
@@ -260,10 +270,11 @@ class TileModel extends Equatable {
       (t) => t.name == map['plotType'],
       orElse: () => PlotType.residential,
     ),
+    purchasePrice: map['purchasePrice']?.toDouble(),
   );
 
   @override
-  List<Object?> get props => [index, ownerId, upgradeLevel, customName, price];
+  List<Object?> get props => [index, ownerId, upgradeLevel, customName, price, purchasePrice];
 }
 
 // ── Lane Layout Calculator ───────────────────────────────────────────────────

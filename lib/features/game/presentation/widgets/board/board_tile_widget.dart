@@ -94,27 +94,83 @@ class _PlotTileCardState extends State<PlotTileCard>
           // 1.0 and nothing looks different. If it doesn't, it shrinks
           // uniformly instead of throwing the "OVERFLOWED BY n PIXELS"
           // banner — there is no code path left that can overflow here.
-          child: SizedBox(
-            width: widget.width,
-            height: widget.height,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.topCenter,
-              child: SizedBox(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              SizedBox(
                 width: widget.width,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _topStrip(),
-                    _body(),
-                    if (widget.players.isNotEmpty) _playerTokens(),
-                  ],
+                height: widget.height,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: widget.width,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _topStrip(),
+                        _body(),
+                        if (widget.players.isNotEmpty) _playerTokens(),
+                      ],
+                    ),
+                  ),
                 ),
+              ),
+              // Premium "SOLD" ribbon for owned plots — sized to the real
+              // (unscaled) tile box so it always sits crisply in the corner
+              // regardless of how much the FittedBox above had to shrink
+              // its content. Purely decorative: IgnorePointer keeps taps
+              // passing straight through to the tile underneath.
+              if (widget.tile.isOwned) _soldOverlay(),
+            ],
+          ),
+        ),
+      ),
+      ),
+    );
+  }
+
+  // ── Premium "SOLD" ribbon ─────────────────────────────────────────
+  Widget _soldOverlay() {
+    final ownerColor = _ownerColor();
+    return Positioned(
+      top: 8,
+      right: -26,
+      child: IgnorePointer(
+        child: Transform.rotate(
+          angle: 0.785398, // 45 degrees
+          child: Container(
+            width: 90,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  ownerColor.withValues(alpha: 0.95),
+                  ownerColor.withValues(alpha: 0.75),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: const Text(
+              'SOLD',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 7.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

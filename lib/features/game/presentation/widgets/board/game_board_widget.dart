@@ -9,6 +9,7 @@ class GameBoardWidget extends StatefulWidget {
   final List<PlayerModel> players;
   final Widget centerWidget;          // dice area shown in header
   final VoidCallback? onLogTap;
+  final VoidCallback? onGoTap;        // tapping the GO / home tile
   final Set<int> highlightedTiles;    // positions being traversed (animation)
   final String? currentPlayerId;      // whose turn it is — for traffic light
   final void Function(TileModel)? onTileTap;
@@ -20,6 +21,7 @@ class GameBoardWidget extends StatefulWidget {
     
     required this.centerWidget,
     this.onLogTap,
+    this.onGoTap,
     this.highlightedTiles = const {},
     this.currentPlayerId,
     this.onTileTap,
@@ -99,7 +101,9 @@ class _GameBoardWidgetState extends State<GameBoardWidget> {
               startTilePlayers: _playersAt(0),
               diceWidget: centerWidget,
               onLogTap: onLogTap,
+              onGoTap: widget.onGoTap,
               allPlayers: players,
+              currentPlayerId: currentPlayerId,
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -138,12 +142,16 @@ class _MainRoadHeader extends StatelessWidget {
   final List<PlayerModel> allPlayers;
   final Widget diceWidget;
   final VoidCallback? onLogTap;
+  final VoidCallback? onGoTap;
+  final String? currentPlayerId;
 
   const _MainRoadHeader({
     required this.startTilePlayers,
     required this.allPlayers,
     required this.diceWidget,
     this.onLogTap,
+    this.onGoTap,
+    this.currentPlayerId,
   });
 
   @override
@@ -175,6 +183,8 @@ class _MainRoadHeader extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
                 Row(children: [
@@ -189,50 +199,30 @@ class _MainRoadHeader extends StatelessWidget {
                   const SizedBox(width: 5),
                   Container(width: 30, height: 2, color: AppColors.secondary),
                 ]),
-                // Player dots
-                if (startTilePlayers.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Row(
-                    children: startTilePlayers.map((p) => Container(
-                      width: 16,
-                      height: 16,
-                      margin: const EdgeInsets.only(right: 3),
-                      decoration: BoxDecoration(
-                        color: p.color,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          p.displayName.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white, fontSize: 7,
-                            fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    )).toList(),
+                const SizedBox(height: 5),
+                // Turn-based traffic-light dots for every seated player:
+                // green + soft glow = it's their turn right now, solid red
+                // = waiting. Wrap so it never overflows however many
+                // players are at the table.
+                SizedBox(
+                  height: 18,
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 2,
+                    children: allPlayers.map((p) =>
+                        _TrafficDot(player: p, isActive: p.id == currentPlayerId)
+                    ).toList(),
                   ),
-                ] else ...[
-                  const SizedBox(height: 5),
-                  Row(
-                    children: allPlayers.take(4).map((p) => Container(
-                      width: 14,
-                      height: 14,
-                      margin: const EdgeInsets.only(right: 3),
-                      decoration: BoxDecoration(
-                        color: p.color.withValues(alpha: 0.4),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: p.color, width: 1),
-                      ),
-                    )).toList(),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
 
           // GO tile
-          _GoTile(),
+          GestureDetector(
+            onTap: onGoTap,
+            child: const _GoTile(),
+          ),
           const SizedBox(width: 8),
 
           // Dice area — wide enough for either the single dice icon OR,
@@ -255,7 +245,56 @@ class _MainRoadHeader extends StatelessWidget {
   }
 }
 
+// ── Header traffic-light dot: green + glow for the active player,
+// solid red for whoever is waiting their turn ──────────────────────────────
+class _TrafficDot extends StatelessWidget {
+  final PlayerModel player;
+  final bool isActive;
+  const _TrafficDot({required this.player, required this.isActive});
+
+  static const _green = Color(0xFF00E676);
+  static const _red = Color(0xFFE53935);
+
+  @override
+  Widget build(BuildContext context) {
+    final light = isActive ? _green : _red;
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: light,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: _green.withValues(alpha: 0.85),
+                  blurRadius: 8,
+                  spreadRadius: 1.5,
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: _red.withValues(alpha: 0.4),
+                  blurRadius: 2,
+                ),
+              ],
+      ),
+      child: Center(
+        child: Text(
+          player.displayName.isNotEmpty ? player.displayName.substring(0, 1).toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white, fontSize: 7,
+            fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+  }
+}
+
 class _GoTile extends StatelessWidget {
+  const _GoTile();
+
   @override
   Widget build(BuildContext context) => Container(
     width: 52,

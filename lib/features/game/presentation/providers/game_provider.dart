@@ -321,7 +321,8 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     state = gs.copyWith(
       tiles: gs.tiles.map((t) => t.index == tile.index
           ? t.copyWith(ownerId: playerId, price: price,
-              customName: name, customEmoji: customEmoji)
+              customName: name, customEmoji: customEmoji,
+              purchasePrice: price)
           : t).toList(),
       players: gs.players.map((p) {
         if (p.id == playerId) {
@@ -336,6 +337,90 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       eventMessage: '$msg!',
       lastEvent: GameEvent.propertyBought,
     );
+  }
+
+  // ── Sell to Bank ──────────────────────────────────────────────────
+  // Instant liquidity: the bank buys the plot back off the owner at a
+  // discount to its current (appreciated/developed) value, rather than
+  // the owner having to find another player willing to buy it. The plot
+  // immediately goes back on the market for anyone to buy fresh.
+  void sellToBank(String playerId, int tileIndex) {
+    if (state == null) return;
+    final gs   = state!;
+    final tile = gs.tiles[tileIndex];
+    if (tile.ownerId != playerId) return;
+
+    final payout = tile.currentValue * AppConstants.sellToBankRate;
+    final seller = gs.players.firstWhere((p) => p.id == playerId);
+    final msg = '🏦 ${seller.displayName} sold "${tile.displayName}" '
+        'back to the Bank for ${_f(payout)}';
+    _log(msg);
+
+    state = gs.copyWith(
+      tiles: gs.tiles.map((t) => t.index == tileIndex
+          ? t.copyWith(clearOwnership: true) : t).toList(),
+      players: gs.players.map((p) => p.id == playerId
+          ? p.copyWith(
+              money: p.money + payout,
+              ownedPropertyIds:
+                  p.ownedPropertyIds.where((id) => id != tileIndex.toString()).toList(),
+            )
+          : p).toList(),
+      activityLog: [...gs.activityLog, msg],
+      eventMessage: msg,
+    );
+  }
+
+  // ── Sell / Auction to another player ────────────────────────────────
+  // A direct, negotiated sale between two players — the owner picks a
+  // buyer and an agreed price (the "auction" is the negotiation the
+  // players do out loud; this just executes the agreed transfer safely).
+  void sellToPlayer(String sellerId, String buyerId, int tileIndex, double price) {
+    if (state == null || price <= 0) return;
+    final gs     = state!;
+    final tile   = gs.tiles[tileIndex];
+    if (tile.ownerId != sellerId || sellerId == buyerId) return;
+    final buyer  = gs.players.firstWhere((p) => p.id == buyerId, orElse: () => gs.players.first);
+    if (buyer.id != buyerId || buyer.money < price) return;
+    final seller = gs.players.firstWhere((p) => p.id == sellerId);
+
+    final msg = '🤝 ${seller.displayName} sold "${tile.displayName}" to '
+        '${buyer.displayName} for ${_f(price)}';
+    _log(msg);
+
+    state = gs.copyWith(
+      tiles: gs.tiles.map((t) => t.index == tileIndex
+          ? t.copyWith(ownerId: buyerId, price: price, purchasePrice: price)
+          : t).toList(),
+      players: gs.players.map((p) {
+        if (p.id == sellerId) {
+          return p.copyWith(
+            money: p.money + price,
+            ownedPropertyIds:
+                p.ownedPropertyIds.where((id) => id != tileIndex.toString()).toList(),
+          );
+        }
+        if (p.id == buyerId) {
+          return p.copyWith(
+            money: p.money - price,
+            ownedPropertyIds: [...p.ownedPropertyIds, tileIndex.toString()],
+          );
+        }
+        return p;
+      }).toList(),
+      activityLog: [...gs.activityLog, msg],
+      eventMessage: msg,
+    );
+  }
+
+  // ── Auto-dismiss the top event banner ──────────────────────────────
+  // Called a couple seconds after an event message appears. Guards against
+  // clobbering a newer message that may have arrived in the meantime by
+  // only clearing if the message is still the one that scheduled the clear.
+  void clearEventMessage([String? onlyIfMatches]) {
+    if (state == null) return;
+    if (onlyIfMatches != null && state!.eventMessage != onlyIfMatches) return;
+    state = state!.copyWith(eventMessage: null);
   }
 
   // ── Rename ────────────────────────────────────────────────────────
@@ -376,6 +461,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     if (isRoundEnd) {
       tiles = _applyAppreciation(tiles);
+      tiles = _applyMarketInflation(tiles);
       _applyFarmIncome(gs, log);
       roundsPlayed += 1;
       log.add('📈 Round $roundsPlayed complete — properties appreciated!');
@@ -509,6 +595,17 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       final key = t.plotType.name;
       final rate = AppConstants.appreciationRate[key] ?? 0.02;
       return t.copyWith(price: t.price! * (1 + rate));
+    }).toList();
+  }
+
+  // Unsold plots slowly get pricier as the township's total wealth grows,
+  // so early 6-12L starter plots climb toward the high-tier prices instead
+  // of staying frozen forever while players accumulate cash.
+  List<TileModel> _applyMarketInflation(List<TileModel> tiles) {
+    return tiles.map((t) {
+      if (t.isOwned || t.price == null) return t;
+      return t.copyWith(
+          price: t.price! * (1 + AppConstants.marketInflationRate));
     }).toList();
   }
 

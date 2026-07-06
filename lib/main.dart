@@ -22,6 +22,23 @@ class PlotPlotApp extends StatelessWidget {
       title: 'Plot Plot',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      // The board, dice, and HUD cards use tightly fixed pixel sizes to fit
+      // a lot of live game data into a small mobile screen. Left unclamped,
+      // a user's system "large text" accessibility setting can multiply
+      // every label past what those cards were built to hold, producing
+      // RenderFlex "OVERFLOWED BY n PIXELS" errors under player names, the
+      // Bank balance row, and empty-plot cards. Clamping (not disabling)
+      // text scale keeps things legible while guaranteeing the HUD never
+      // breaks layout.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(minScaleFactor: 0.85, maxScaleFactor: 1.15),
+          ),
+          child: child!,
+        );
+      },
       home: const LoginScreen(),
     );
   }

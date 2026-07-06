@@ -48,10 +48,10 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 
   void _startGame() {
     final List<PlayerModel> players = [];
-    final startMoney =
-        AppConstants.startingMoneyByPlayers[_playerCount] ??
-        AppConstants.startingMoneyByPlayers[4]!;
 
+    // Realistic, perfectly-equal economy: every player gets the same
+    // starting cash, bank balance, and a starter farm — no advantage or
+    // penalty based on how many people are seated at the table.
     for (int i = 0; i < _playerCount; i++) {
       final name = _nameControllers[i].text.trim().isEmpty
           ? 'Player ${i + 1}'
@@ -59,7 +59,12 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       players.add(PlayerModel(
         id: 'player_$i',
         displayName: name,
-        money: startMoney,
+        money: AppConstants.startingCash,
+        bankBalance: AppConstants.startingBank,
+        farms: List.generate(
+          AppConstants.startingFarmsPerPlayer,
+          (f) => FarmModel(id: 'starter_farm_${i}_$f', level: 1),
+        ),
         colorIndex: i,
       ));
     }
@@ -91,29 +96,31 @@ Navigator.of(context).push(
         backgroundColor: AppColors.appBg,
       ),
       backgroundColor: AppColors.appBg,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionTitle('Board Size'),
-            _buildBoardSizeSelector(),
-            const SizedBox(height: 20),
-            _sectionTitle('Number of Players'),
-            _buildPlayerCountSelector(),
-            const SizedBox(height: 20),
-            _sectionTitle('Player Names'),
-            _buildPlayerNameFields(),
-            const SizedBox(height: 20),
-            _sectionTitle('End Game After'),
-            _buildEndRoundSelector(),
-            const SizedBox(height: 20),
-            _sectionTitle('Game Features'),
-            _buildToggles(),
-            const SizedBox(height: 32),
-            _buildStartButton(),
-            const SizedBox(height: 20),
-          ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Board Size'),
+              _buildBoardSizeSelector(),
+              const SizedBox(height: 20),
+              _sectionTitle('Number of Players'),
+              _buildPlayerCountSelector(),
+              const SizedBox(height: 20),
+              _sectionTitle('Player Names'),
+              _buildPlayerNameFields(),
+              const SizedBox(height: 20),
+              _sectionTitle('End Game After'),
+              _buildEndRoundSelector(),
+              const SizedBox(height: 20),
+              _sectionTitle('Game Features'),
+              _buildToggles(),
+              const SizedBox(height: 32),
+              _buildStartButton(),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );

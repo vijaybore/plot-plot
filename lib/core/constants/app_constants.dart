@@ -26,6 +26,27 @@ class AppConstants {
     7: 2000000,
   };
 
+  // ── Realistic 25-plot economy ─────────────────────────────────────
+  // Every player starts on a perfectly level playing field regardless of
+  // player count: ₹120L cash-in-hand, ₹80L already parked in the bank
+  // (earning safety from tax/rent shocks), plus one starter farm so the
+  // farm-income loop is live from turn one.
+  static const double startingCash = 12000000;   // ₹120L
+  static const double startingBank = 8000000;    // ₹80L
+  static const int startingFarmsPerPlayer = 1;
+
+  // Market inflation: every full round, ALL unsold plots get a little more
+  // expensive as the township's total wealth grows — cheap 6-12L starter
+  // plots slowly climb toward the high-tier prices, instead of staying
+  // static forever while players get richer.
+  static const double marketInflationRate = 0.015; // +1.5% / round
+
+  // Sell to Bank: an instant, no-negotiation payout so an owner can always
+  // free up cash without waiting for another player to want the plot.
+  // Priced below full current value (a mortgage-style haircut) so it's
+  // never more attractive than actually selling to another player.
+  static const double sellToBankRate = 0.75; // 75% of current value
+
   static const Map<int, double> salaryByBoardSize = {
     25: 100000,
     50: 200000,
