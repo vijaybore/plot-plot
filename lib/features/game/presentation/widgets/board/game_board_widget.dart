@@ -426,6 +426,19 @@ class _LaneSection extends StatelessWidget {
               .where((p) => p.position == tile.index)
               .toList();
           final card = PlotTileCard(
+            // An explicit, content-derived key (not just list position)
+            // forces Flutter to treat this as a brand-new widget whenever
+            // the tile's owner/occupants/highlight state actually changes,
+            // instead of trying to reuse the same Element/RenderObject in
+            // place. Without this, a hot-reload across a layout rewrite
+            // (like Column -> Stack+FittedBox) can leave a stale, already-
+            // painted overflow banner stuck on screen until a full app
+            // restart — this key makes that class of staleness impossible.
+            key: ValueKey(
+              'tile-${tile.index}-${tile.ownerId}-${tile.upgradeLevel}-'
+              '${onTile.map((p) => p.id).join(",")}-'
+              '${highlightedTiles.contains(tile.index)}',
+            ),
             tile: tile,
             players: onTile,
             allPlayers: allPlayers,
