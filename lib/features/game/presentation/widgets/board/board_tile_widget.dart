@@ -83,17 +83,12 @@ class _PlotTileCardState extends State<PlotTileCard>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          // Everything below used to rely on hand-budgeted pixel heights
-          // (a fixed top strip + an Expanded body + a fixed token row all
-          // having to add up to exactly widget.height). Any small mismatch
-          // — a longer plot label, a font metrics difference between
-          // platforms, an extra wrapped line — threw a hard RenderFlex
-          // overflow. FittedBox removes that failure mode entirely: the
+          // Everything below used to rely on hand-budgeted pixel heights.
+          // FittedBox removes that failure mode entirely: the
           // content is measured at its natural (intrinsic) size and then
           // scaled to fit the tile exactly. If it already fits, scale is
           // 1.0 and nothing looks different. If it doesn't, it shrinks
-          // uniformly instead of throwing the "OVERFLOWED BY n PIXELS"
-          // banner — there is no code path left that can overflow here.
+          // uniformly instead of throwing an overflow.
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -110,12 +105,16 @@ class _PlotTileCardState extends State<PlotTileCard>
                       children: [
                         _topStrip(),
                         _body(),
-                        if (widget.players.isNotEmpty) _playerTokens(),
                       ],
                     ),
                   ),
                 ),
               ),
+              if (widget.players.isNotEmpty)
+                Positioned(
+                  bottom: 0, left: 2, right: 2,
+                  child: _playerTokens(),
+                ),
               // Premium "SOLD" ribbon for owned plots — sized to the real
               // (unscaled) tile box so it always sits crisply in the corner
               // regardless of how much the FittedBox above had to shrink
@@ -376,20 +375,11 @@ class _PlotTileCardState extends State<PlotTileCard>
   // Clean 3D-stylized letter badges — no floating heads / full bodies.
   // The active player's token gets a small traffic-light marker beside it
   // to show whose turn it is right there on the board.
-  // Wrap (not Row) so multiple tokens on a tight ~110px-wide tile can
-  // never throw a RenderFlex overflow — they simply wrap to a 2nd line.
+  // Wrap (not Row) so multiple tokens on a tight tile wrap nicely to a 2nd line.
+  // The tile's own outer FittedBox (in build()) already scales the whole column
+  // down if it ever runs out of room, so nothing here needs its own SizedBox
+  // or its own nested FittedBox.
   Widget _playerTokens() {
-    // Previously this wrapped the Wrap in SizedBox(width: double.infinity).
-    // That's the actual bug behind the "OVERFLOWED BY 200 PIXELS" banner:
-    // a SizedBox with width: double.infinity creates a *tight* (min==max)
-    // infinite-width constraint. The Column above always clamps width to
-    // widget.width (~110) once it's inside the tile's outer FittedBox, so
-    // that infinite minWidth collides with a finite maxWidth — an invalid
-    // BoxConstraints that fails layout and shows up as this exact overflow
-    // banner. Just let the Wrap size itself naturally; the tile's own
-    // outer FittedBox (in build()) already scales the whole column down
-    // if it ever runs out of room, so nothing here needs its own SizedBox
-    // or its own nested FittedBox.
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 4, left: 3, right: 3),
       child: Wrap(

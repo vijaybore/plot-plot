@@ -460,5 +460,5 @@ class TileFactory {
 
 // Alias for backward compat
 class TileBuilder {
-  static List<TileModel> buildTiles(int n) => TileFactory.build(n);
+ static List<TileModel> buildTiles(int n) => TileFactory.build(n);
 }

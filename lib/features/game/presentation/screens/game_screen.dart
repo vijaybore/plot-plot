@@ -893,14 +893,8 @@ class _PlayerCardState extends State<_PlayerCard>
         animation: _pulse,
         builder: (_, child) => Container(
           width: width,
-          // Fixed, generous height with tight internal spacing — the old
-          // layout relied on a Spacer() inside a too-short box, which is
-          // exactly what produced "BOTTOM OVERFLOWED" in debug builds
-          // whenever the optional Loan row appeared. Giving every row a
-          // fixed slot (no Spacer) guarantees it always fits. Bumped from
-          // 102 → 106: the pulsing-border version added slightly heavier
-          // shadow/border painting that was tipping this over by 1px on
-          // some players (the "BOTTOM OVERFLOWED BY 1.00 PIXELS" strip).
+          // Fixed, generous height with tight internal spacing.
+          // Giving every row a fixed slot guarantees it always fits.
           height: 106,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
@@ -1548,20 +1542,16 @@ class _BuySheetState extends State<_BuySheet> {
   String _emoji    = '';
   String? _error;
   late double _price;
-  late double _minPrice;
-  late double _maxPrice;
+  final List<double> _priceOptions = List.generate(17, (i) => 1000000.0 + (i * 50000.0));
 
   @override
   void initState() {
     super.initState();
     _emoji = TileModel.suggestedEmojis(widget.tile.plotType).first;
-    final range = TileModel.priceRange(widget.tile.plotType);
-    _minPrice = range.$1;
-    _maxPrice = range.$2;
-    // Start at the old fixed-price point within the range — familiar
-    // anchor, but now fully adjustable by the player.
-    _price = TileModel.fixedPrice(widget.tile.plotType)
-        .clamp(_minPrice, _maxPrice).toDouble();
+    // Default to the base price of the plot type, snapped to the nearest 50k option, 
+    // bounded between 10L and 18L.
+    double base = TileModel.fixedPrice(widget.tile.plotType).toDouble();
+    _price = _priceOptions.reduce((a, b) => (a - base).abs() < (b - base).abs() ? a : b);
   }
 
   @override
@@ -1616,8 +1606,8 @@ class _BuySheetState extends State<_BuySheet> {
                 const SizedBox(height: 3),
                 const Text('PURCHASE PLOT', style: TextStyle(
                   color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
-                Text('Price range: ${_f(_minPrice)} – ${_f(_maxPrice)}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10,
+                const Text('Price range: ₹10.00L – ₹18.00L',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 10,
                       fontWeight: FontWeight.w700)),
               ]),
             ]),
@@ -1680,18 +1670,30 @@ class _BuySheetState extends State<_BuySheet> {
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
                 decoration: BoxDecoration(
                   color: AppColors.appSurface,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                       color: canAfford ? AppColors.appBorder : AppColors.danger),
                 ),
-                child: Column(children: [
-                  Text(_f(_price), style: TextStyle(
-                    color: canAfford ? AppColors.accent : AppColors.danger,
-                    fontSize: 26, fontWeight: FontWeight.w900)),
-                ]),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<double>(
+                    value: _price,
+                    isExpanded: true,
+                    dropdownColor: AppColors.appSurface,
+                    icon: Icon(Icons.arrow_drop_down, color: canAfford ? AppColors.accent : AppColors.danger),
+                    items: _priceOptions.map((p) => DropdownMenuItem(
+                      value: p,
+                      child: Text(_f(p), style: TextStyle(
+                        color: canAfford ? AppColors.accent : AppColors.danger,
+                        fontSize: 22, fontWeight: FontWeight.w900)),
+                    )).toList(),
+                    onChanged: (val) {
+                      if (val != null) setState(() => _price = val);
+                    },
+                  ),
+                ),
               ),
               if (!canAfford) ...[
                 const SizedBox(height: 8),

@@ -8,7 +8,6 @@ class AudioManager {
   AudioManager._internal();
 
   final AudioPlayer _bgmPlayer = AudioPlayer();
-  final AudioPlayer _sfxPlayer = AudioPlayer();
 
   bool _isMuted = false;
   bool get isMuted => _isMuted;
