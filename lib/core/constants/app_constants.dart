@@ -13,10 +13,11 @@ class AppConstants {
   static const int maxDiceValue = 6;
 
   // Economy
-  // Fixed plot prices range ₹8L (farm) → ₹40L (luxury), avg ≈ ₹17L on a
-  // 25-plot board. Starting cash is set so each player can buy 2-3 plots
-  // right away and then grow via GO salary, rent, and farm income across
-  // the game — nobody is meant to buy the whole board on turn one.
+  // Fixed plot prices now range ₹10L (farm) → ₹18L (luxury) — a tight,
+  // easy-to-track band. Starting cash is set so each player can buy
+  // several plots right away and then grow via GO salary, rent, and farm
+  // income across the game — nobody is meant to buy the whole board on
+  // turn one.
   static const Map<int, double> startingMoneyByPlayers = {
     2: 4000000,
     3: 3600000,

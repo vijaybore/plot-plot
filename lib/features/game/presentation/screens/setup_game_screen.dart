@@ -49,9 +49,10 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
   void _startGame() {
     final List<PlayerModel> players = [];
 
-    // Realistic, perfectly-equal economy: every player gets the same
-    // starting cash, bank balance, and a starter farm — no advantage or
-    // penalty based on how many people are seated at the table.
+    // Dynamic cash formula: scale economy based on available plots and players
+    final double dynamicStartingCash = (_boardSize * 1000000.0) / _playerCount;
+    final double dynamicStartingBank = dynamicStartingCash * 0.66;
+
     for (int i = 0; i < _playerCount; i++) {
       final name = _nameControllers[i].text.trim().isEmpty
           ? 'Player ${i + 1}'
@@ -59,8 +60,8 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       players.add(PlayerModel(
         id: 'player_$i',
         displayName: name,
-        money: AppConstants.startingCash,
-        bankBalance: AppConstants.startingBank,
+        money: dynamicStartingCash,
+        bankBalance: dynamicStartingBank,
         farms: List.generate(
           AppConstants.startingFarmsPerPlayer,
           (f) => FarmModel(id: 'starter_farm_${i}_$f', level: 1),

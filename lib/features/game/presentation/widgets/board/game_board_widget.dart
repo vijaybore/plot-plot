@@ -460,37 +460,67 @@ class _LaneSection extends StatelessWidget {
     ),
   );
 
+  // A real constructed-road look: dark asphalt body with a subtle depth
+  // gradient, painted kerb lines top and bottom, a proper dashed yellow
+  // centre line (not just faint white ticks), and a road-sign-style name
+  // plate instead of a plain translucent label box.
   Widget _road() => Container(
-    height: 24,
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Color(0xFFD4C9B0), Color(0xFFC5B99A), Color(0xFFD4C9B0)],
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
+    height: 30,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF44454A), Color(0xFF2C2D30), Color(0xFF3A3B3F)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        stops: [0.0, 0.55, 1.0],
       ),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 4),
+      ],
     ),
     child: Stack(
       alignment: Alignment.center,
       children: [
+        // Kerb / edge lines — the pale strip a real road has where the
+        // asphalt meets the shoulder.
+        Positioned(
+          top: 3, left: 0, right: 0,
+          child: Container(height: 1.4, color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        Positioned(
+          bottom: 3, left: 0, right: 0,
+          child: Container(height: 1.4, color: Colors.white.withValues(alpha: 0.22)),
+        ),
+        // Dashed yellow centre line — a real lane marking, not faint ticks.
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(14, (i) => Container(
-            width: 14, height: 2.5,
-            color: Colors.white.withValues(alpha: 0.45),
+          children: List.generate(20, (i) => Container(
+            width: 12, height: 2.6,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFC107),
+              borderRadius: BorderRadius.circular(1.2),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFFFFC107).withValues(alpha: 0.4), blurRadius: 2),
+              ],
+            ),
           )),
         ),
+        // Road name plate — a small dark sign instead of a translucent box.
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
+            color: const Color(0xFF1C1C1E),
             borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.55), width: 0.8),
+            boxShadow: const [
+              BoxShadow(color: Colors.black45, blurRadius: 3, offset: Offset(0, 1)),
+            ],
           ),
           child: const Text(
             'INTERNAL ROAD',
             style: TextStyle(
-              color: Color(0xFF6D5B3B),
+              color: Color(0xFFF5F0E6),
               fontSize: 7,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               letterSpacing: 1.8,
             ),
           ),

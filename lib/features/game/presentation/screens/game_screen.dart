@@ -64,11 +64,22 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   // ── Toast notification ────────────────────────────────────────────
+  int _toastGen = 0;
   void _showToast(String msg) async {
+    final gen = ++_toastGen;
     setState(() => _toastMsg = msg);
     _toastCtrl.forward(from: 0);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) _toastCtrl.reverse();
+    await Future.delayed(const Duration(seconds: 5));
+    // Only the most recently shown toast is allowed to dismiss — if a
+    // newer one fired in the meantime (or the user already tapped this
+    // one away), this stale timer backs off instead of cutting the new
+    // message short.
+    if (mounted && gen == _toastGen) _dismissToast();
+  }
+
+  void _dismissToast() {
+    if (!mounted) return;
+    _toastCtrl.reverse();
   }
 
   // ── Log panel ─────────────────────────────────────────────────────
@@ -119,13 +130,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _showSurpriseDetail(next.eventMessage!);
       }
 
-      // Auto-dismiss the top event banner shortly after it appears instead
-      // of leaving it stuck on screen until the next roll. Captures the
-      // exact message so a newer event that arrives in the meantime is
-      // never accidentally cleared early.
+      // Auto-dismiss the top event banner after a proper reading window
+      // instead of leaving it stuck on screen until the next roll — but
+      // give it long enough that "X purchased for ₹Y" or "Z paid rent"
+      // is actually readable, not a flash. Captures the exact message so
+      // a newer event that arrives in the meantime is never accidentally
+      // cleared early. The player can also tap the banner to dismiss it
+      // immediately (see _EventBanner's onTap).
       if (next.eventMessage != null && next.eventMessage != prev?.eventMessage) {
         final msg = next.eventMessage;
-        Future.delayed(const Duration(milliseconds: 2600), () {
+        Future.delayed(const Duration(seconds: 6), () {
           if (!mounted) return;
           ref.read(gameProvider.notifier).clearEventMessage(msg);
         });
@@ -153,7 +167,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
           Column(children: [
             _AppBar(gs: gs, onLogTap: _toggleLog, onBankTap: () => _showBankSheet(gs)),
             _TurnBanner(player: cur),
-            if (gs.eventMessage != null) _EventBanner(msg: gs.eventMessage!),
+            if (gs.eventMessage != null)
+              _EventBanner(
+                msg: gs.eventMessage!,
+                onDismiss: () => ref.read(gameProvider.notifier)
+                    .clearEventMessage(gs.eventMessage),
+              ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
@@ -206,7 +225,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
               top: 80, left: 16, right: 16,
               child: SlideTransition(
                 position: _toastSlide,
-                child: _Toast(msg: _toastMsg!),
+                child: GestureDetector(
+                  onTap: _dismissToast,
+                  child: _Toast(msg: _toastMsg!),
+                ),
               ),
             ),
 
@@ -297,17 +319,72 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   // ── GO tile tap ───────────────────────────────────────────────────
-  // Restores real functionality to the GO/home tile: shows who's currently
-  // parked there and reminds everyone what passing GO pays out.
+  // Shows who's currently parked there and reminds everyone what passing
+  // GO pays out. This used to be a toast — which meant it could vanish
+  // before it was even fully read. It's a proper bottom sheet now, so it
+  // stays up until the player actually closes it.
   void _showGoInfo(GameStateModel gs) {
     final salary = AppConstants.salaryByBoardSize[gs.boardSize] ??
         AppConstants.defaultSalary;
     final onGo = gs.players.where((p) => p.position == 0).toList();
-    final who = onGo.isEmpty
-        ? 'No one is on Main Road right now.'
-        : '${onGo.map((p) => p.displayName).join(", ")} '
-          '${onGo.length == 1 ? "is" : "are"} parked on Main Road.';
-    _showToast('🏠 Passing GO pays ${_f(salary)}. $who');
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.appCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.appBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🏠', style: TextStyle(fontSize: 32)),
+            const SizedBox(height: 8),
+            const Text('MAIN ROAD',
+                style: TextStyle(color: AppColors.accent, fontSize: 14,
+                    fontWeight: FontWeight.w900, letterSpacing: 1)),
+            const SizedBox(height: 10),
+            Text('Passing GO pays every player ${_f(salary)}.',
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            if (onGo.isEmpty)
+              const Text('No one is parked on Main Road right now.',
+                  style: TextStyle(color: AppColors.textHint, fontSize: 12),
+                  textAlign: TextAlign.center)
+            else ...[
+              const Text('Parked here now:',
+                  style: TextStyle(color: AppColors.textHint, fontSize: 11)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
+                children: onGo.map((p) => Chip(
+                  label: Text(p.displayName, style: const TextStyle(fontSize: 12)),
+                  backgroundColor: p.color.withValues(alpha: 0.18),
+                  side: BorderSide(color: p.color),
+                )).toList(),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('GOT IT', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Plot details (tap any tile) ──────────────────────────────────────
@@ -522,22 +599,36 @@ class _TurnBanner extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _EventBanner extends StatelessWidget {
   final String msg;
-  const _EventBanner({required this.msg});
+  final VoidCallback? onDismiss;
+  const _EventBanner({required this.msg, this.onDismiss});
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-    decoration: BoxDecoration(
-      color: AppColors.appCard,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.appBorder),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onDismiss,
+    child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.fromLTRB(14, 7, 10, 7),
+      decoration: BoxDecoration(
+        color: AppColors.appCard,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.appBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(msg,
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
+                  fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+          if (onDismiss != null) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.close, size: 14, color: AppColors.textHint),
+          ],
+        ],
+      ),
     ),
-    child: Text(msg,
-      style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
-          fontWeight: FontWeight.w600),
-      textAlign: TextAlign.center,
-      maxLines: 2, overflow: TextOverflow.ellipsis),
   );
 }
 
@@ -1577,12 +1668,8 @@ class _BuySheetState extends State<_BuySheet> {
                 onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 14),
-              // Player-driven price negotiation — pick anywhere in the
-              // plot's allowed range instead of a single locked price.
-              // Buying lower protects cash for future plots; buying
-              // higher raises this plot's resale/rent value faster.
               Row(children: [
-                const Text('Your Offer (₹)', style: TextStyle(
+                const Text('Price (₹)', style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text('Your cash: ${_f(balance)}',
@@ -1604,33 +1691,11 @@ class _BuySheetState extends State<_BuySheet> {
                   Text(_f(_price), style: TextStyle(
                     color: canAfford ? AppColors.accent : AppColors.danger,
                     fontSize: 26, fontWeight: FontWeight.w900)),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: AppColors.accent,
-                      inactiveTrackColor: AppColors.appBorder,
-                      thumbColor: AppColors.accent,
-                      overlayColor: AppColors.accent.withValues(alpha: 0.2),
-                      trackHeight: 5,
-                    ),
-                    child: Slider(
-                      value: _price,
-                      min: _minPrice,
-                      max: _maxPrice,
-                      divisions: 20,
-                      onChanged: (v) => setState(() => _price = v),
-                    ),
-                  ),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text('Low: ${_f(_minPrice)}', style: const TextStyle(
-                        color: AppColors.textHint, fontSize: 10)),
-                    Text('High: ${_f(_maxPrice)}', style: const TextStyle(
-                        color: AppColors.textHint, fontSize: 10)),
-                  ]),
                 ]),
               ),
               if (!canAfford) ...[
                 const SizedBox(height: 8),
-                const Text('❌ Slide left — this offer is above your cash on hand',
+                const Text('❌ You don\'t have enough cash for this plot',
                   style: TextStyle(color: AppColors.danger, fontSize: 12)),
               ],
               if (_error != null) ...[
@@ -1870,6 +1935,10 @@ class _PlotDetailsSheetState extends State<_PlotDetailsSheet> {
               _infoRow('Bought for', _f(tile.purchasePrice ?? tile.price ?? 0)),
               _infoRow('Current value', _f(tile.currentValue)),
               _infoRow('Development', tile.upgradeName),
+              if (tile.totalRentCollected > 0)
+                _infoRow('Rent collected', _f(tile.totalRentCollected)),
+              const SizedBox(height: 10),
+              _visitHistory(gs),
               const SizedBox(height: 14),
               if (isOwnerViewing)
                 _showSellToPlayer
@@ -1893,6 +1962,8 @@ class _PlotDetailsSheetState extends State<_PlotDetailsSheet> {
             ] else ...[
               _infoRow('Listing price',
                   _f(tile.price ?? TileModel.fixedPrice(tile.plotType))),
+              const SizedBox(height: 10),
+              _visitHistory(gs),
               const SizedBox(height: 10),
               const Text(
                 'This plot is unowned. Land on it on your turn to buy it.',
@@ -2000,6 +2071,52 @@ class _PlotDetailsSheetState extends State<_PlotDetailsSheet> {
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
           )),
         ]),
+      ],
+    );
+  }
+
+  // Who has landed on this plot, and how many times each — lets players
+  // see the traffic pattern on a plot (e.g. "an opponent keeps landing
+  // here and paying me rent") at a glance.
+  Widget _visitHistory(GameStateModel gs) {
+    final tile = widget.tile;
+    if (tile.visits.isEmpty) {
+      return const Text(
+        'No one has visited this plot yet.',
+        style: TextStyle(color: AppColors.textHint, fontSize: 12, fontStyle: FontStyle.italic),
+      );
+    }
+    // Sort by visit count, most-frequent visitor first.
+    final entries = tile.visits.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Visited by',
+            style: TextStyle(color: AppColors.textHint, fontSize: 12)),
+        const SizedBox(height: 6),
+        ...entries.map((e) {
+          final player = gs.players.firstWhere((p) => p.id == e.key,
+              orElse: () => gs.players.first);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(children: [
+              Container(
+                width: 10, height: 10,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(color: player.color, shape: BoxShape.circle),
+              ),
+              Expanded(
+                child: Text(player.displayName,
+                    style: const TextStyle(color: AppColors.textPrimary,
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+              Text('${e.value}× visit${e.value == 1 ? '' : 's'}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            ]),
+          );
+        }),
       ],
     );
   }

@@ -379,32 +379,33 @@ class _PlotTileCardState extends State<PlotTileCard>
   // Wrap (not Row) so multiple tokens on a tight ~110px-wide tile can
   // never throw a RenderFlex overflow — they simply wrap to a 2nd line.
   Widget _playerTokens() {
+    // Previously this wrapped the Wrap in SizedBox(width: double.infinity).
+    // That's the actual bug behind the "OVERFLOWED BY 200 PIXELS" banner:
+    // a SizedBox with width: double.infinity creates a *tight* (min==max)
+    // infinite-width constraint. The Column above always clamps width to
+    // widget.width (~110) once it's inside the tile's outer FittedBox, so
+    // that infinite minWidth collides with a finite maxWidth — an invalid
+    // BoxConstraints that fails layout and shows up as this exact overflow
+    // banner. Just let the Wrap size itself naturally; the tile's own
+    // outer FittedBox (in build()) already scales the whole column down
+    // if it ever runs out of room, so nothing here needs its own SizedBox
+    // or its own nested FittedBox.
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4, left: 3, right: 3),
-      child: SizedBox(
-        height: 24,
-        width: double.infinity,
-        // FittedBox guarantees this can never throw a RenderFlex overflow,
-        // no matter how many tokens/lights are on this tile — it scales
-        // the whole row down to fit instead of letting it spill out.
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 2,
-            runSpacing: 2,
-            children: widget.players.take(4).expand((p) {
-              final isCurrent = widget.currentPlayerId != null &&
-                  p.id == widget.currentPlayerId;
-              return [
-                _TrafficLight3D(active: isCurrent),
-                _Token3D(letter: p.displayName.isNotEmpty
-                    ? p.displayName.substring(0, 1).toUpperCase() : '?',
-                    color: p.color),
-              ];
-            }).toList(),
-          ),
-        ),
+      padding: const EdgeInsets.only(top: 2, bottom: 4, left: 3, right: 3),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 2,
+        runSpacing: 2,
+        children: widget.players.take(4).expand((p) {
+          final isCurrent = widget.currentPlayerId != null &&
+              p.id == widget.currentPlayerId;
+          return [
+            _TrafficLight3D(active: isCurrent),
+            _Token3D(letter: p.displayName.isNotEmpty
+                ? p.displayName.substring(0, 1).toUpperCase() : '?',
+                color: p.color),
+          ];
+        }).toList(),
       ),
     );
   }

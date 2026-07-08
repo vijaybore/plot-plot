@@ -92,16 +92,21 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     }
     _log(msg);
 
+    // Record this landing on the tile itself — powers the "who visited
+    // here, how many times" section of the Plot Details sheet.
+    final visitedTile = landedTile.recordVisit(cur.id);
+
     state = gs2.copyWith(
       players: gs2.players.map((p) => p.id == cur.id
           ? p.copyWith(money: p.money + salary)
           : p).toList(),
+      tiles: gs2.tiles.map((t) => t.index == visitedTile.index ? visitedTile : t).toList(),
       isMoving: false,
       lastEvent: _eventFor(landedTile),
       eventMessage: msg,
     );
 
-    await _handleTileLanding(landedTile);
+    await _handleTileLanding(visitedTile);
   }
 
   Future<void> _handleTileLanding(TileModel tile) async {
@@ -282,12 +287,15 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     final msg = '💸 ${payer.displayName} paid ${_f(rent)} rent to ${owner.displayName}';
     _log(msg);
 
+    final rentedTile = tile.recordRentPaid(payer.id, rent);
+
     state = gs.copyWith(
       players: gs.players.map((p) {
         if (p.id == payer.id) return p.copyWith(money: (p.money - rent).clamp(0, double.infinity));
         if (p.id == tile.ownerId) return p.copyWith(money: p.money + rent);
         return p;
       }).toList(),
+      tiles: gs.tiles.map((t) => t.index == rentedTile.index ? rentedTile : t).toList(),
       activityLog: [...gs.activityLog, msg],
       eventMessage: '$msg!',
       lastEvent: GameEvent.rentPaid,

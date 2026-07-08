@@ -34,6 +34,8 @@ class TileModel extends Equatable {
                                 // drifting via appreciation/inflation, so
                                 // "bought for ₹X" in the plot details sheet
                                 // stays accurate even years into the game.
+  final Map<String, int> visits;       // playerId -> times landed here
+  final Map<String, double> rentPaid;  // playerId (payer) -> total rent paid here
 
   const TileModel({
     required this.index,
@@ -49,7 +51,27 @@ class TileModel extends Equatable {
     required this.plotNumber,
     this.plotType = PlotType.residential,
     this.purchasePrice,
+    this.visits = const {},
+    this.rentPaid = const {},
   });
+
+  int get totalVisits => visits.values.fold(0, (a, b) => a + b);
+  double get totalRentCollected => rentPaid.values.fold(0.0, (a, b) => a + b);
+
+  // Record that [playerId] landed on this tile — used for the plot
+  // details view ("who visited here, how many times").
+  TileModel recordVisit(String playerId) {
+    final updated = Map<String, int>.from(visits);
+    updated[playerId] = (updated[playerId] ?? 0) + 1;
+    return copyWith(visits: updated);
+  }
+
+  // Record that [playerId] paid [amount] rent while visiting this tile.
+  TileModel recordRentPaid(String playerId, double amount) {
+    final updated = Map<String, double>.from(rentPaid);
+    updated[playerId] = (updated[playerId] ?? 0) + amount;
+    return copyWith(rentPaid: updated);
+  }
 
   bool get isOwned => ownerId != null;
 
@@ -103,8 +125,9 @@ class TileModel extends Equatable {
   }
 
   double get currentRent {
-    if (price == null) return 0;
-    return price! * (0.08 + (upgradeLevel - 1) * 0.03);
+    if (purchasePrice == null && price == null) return 0;
+    final basePrice = purchasePrice ?? price!;
+    return basePrice * 0.50;
   }
 
   double get currentValue {
@@ -138,38 +161,35 @@ class TileModel extends Equatable {
     }
   }
 
-  // ── Suggested price range (kept for reference / legacy boards) ───
+  // ── Negotiable price range for the Buy sheet ──────────────────────
+  // Every type's range is a tight ±12% band around its fixedPrice, then
+  // clamped to the requested overall ₹10L–₹18L band, so no plot — of
+  // any type — can ever be offered below ₹10L or above ₹18L.
   static (double min, double max) priceRange(PlotType type) {
-    switch (type) {
-      case PlotType.farm:         return (300000, 1500000);
-      case PlotType.garden:       return (500000, 2000000);
-      case PlotType.residential:  return (800000, 3000000);
-      case PlotType.industrial:   return (1000000, 4000000);
-      case PlotType.corner:       return (1200000, 5000000);
-      case PlotType.commercial:   return (1500000, 6000000);
-      case PlotType.highwayFacing:return (1800000, 7000000);
-      case PlotType.lakeView:     return (2000000, 8000000);
-      case PlotType.premium:      return (2500000, 10000000);
-      case PlotType.luxury:       return (4000000, 20000000);
-    }
+    final base = fixedPrice(type);
+    final lo = (base * 0.88).clamp(1000000.0, 1800000.0);
+    final hi = (base * 1.12).clamp(1000000.0, 1800000.0);
+    return (lo, hi);
   }
 
   // ── Fixed listing price ──────────────────────────────────────────
   // Every plot has one non-negotiable bank-set price based on its type.
   // No more "player types in any number" — the board is a real price list,
   // like Ludo squares are fixed positions with fixed rules.
+  // Kept in the requested ₹10L–₹18L range, spread evenly across the ten
+  // plot types from cheapest (farm) to priciest (luxury).
   static double fixedPrice(PlotType type) {
     switch (type) {
-      case PlotType.farm:         return 600000;   // 6L - cheapest, income plot
-      case PlotType.residential:  return 900000;   // 9L
-      case PlotType.garden:       return 1200000;  // 12L - top of entry tier
-      case PlotType.corner:       return 1500000;  // 15L - corner premium
-      case PlotType.industrial:   return 1800000;  // 18L
-      case PlotType.highwayFacing:return 2000000;  // 20L
-      case PlotType.commercial:   return 2500000;  // 25L
-      case PlotType.lakeView:     return 3000000;  // 30L
-      case PlotType.premium:      return 3800000;  // 38L
-      case PlotType.luxury:       return 5000000;  // 50L - high-tier ceiling
+      case PlotType.farm:         return 1000000;  // 10L - cheapest, income plot
+      case PlotType.residential:  return 1090000;  // 10.9L
+      case PlotType.garden:       return 1180000;  // 11.8L
+      case PlotType.corner:       return 1270000;  // 12.7L - corner premium
+      case PlotType.industrial:   return 1360000;  // 13.6L
+      case PlotType.highwayFacing:return 1450000;  // 14.5L
+      case PlotType.commercial:   return 1540000;  // 15.4L
+      case PlotType.lakeView:     return 1630000;  // 16.3L
+      case PlotType.premium:      return 1720000;  // 17.2L
+      case PlotType.luxury:       return 1800000;  // 18L - high-tier ceiling
     }
   }
 
@@ -217,6 +237,8 @@ class TileModel extends Equatable {
     bool clearCustomName = false,
     double? purchasePrice,
     bool clearOwnership = false,
+    Map<String, int>? visits,
+    Map<String, double>? rentPaid,
   }) {
     return TileModel(
       index: index,
@@ -232,6 +254,10 @@ class TileModel extends Equatable {
       plotNumber: plotNumber,
       plotType: plotType,
       purchasePrice: clearOwnership ? null : (purchasePrice ?? this.purchasePrice),
+      // Visit/rent history is per-plot, real-world history — it survives
+      // ownership changes (a new owner doesn't erase who visited before).
+      visits: visits ?? this.visits,
+      rentPaid: rentPaid ?? this.rentPaid,
     );
   }
 
@@ -249,6 +275,8 @@ class TileModel extends Equatable {
     'plotNumber': plotNumber,
     'plotType': plotType.name,
     'purchasePrice': purchasePrice,
+    'visits': visits,
+    'rentPaid': rentPaid,
   };
 
   factory TileModel.fromMap(Map<String, dynamic> map) => TileModel(
@@ -271,10 +299,15 @@ class TileModel extends Equatable {
       orElse: () => PlotType.residential,
     ),
     purchasePrice: map['purchasePrice']?.toDouble(),
+    visits: (map['visits'] as Map?)?.map(
+        (k, v) => MapEntry(k as String, (v as num).toInt())) ?? const {},
+    rentPaid: (map['rentPaid'] as Map?)?.map(
+        (k, v) => MapEntry(k as String, (v as num).toDouble())) ?? const {},
   );
 
   @override
-  List<Object?> get props => [index, ownerId, upgradeLevel, customName, price, purchasePrice];
+  List<Object?> get props =>
+      [index, ownerId, upgradeLevel, customName, price, purchasePrice, visits, rentPaid];
 }
 
 // ── Lane Layout Calculator ───────────────────────────────────────────────────
