@@ -19,16 +19,31 @@ class PlayerPanelWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 96,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: players.length,
-        itemBuilder: (ctx, i) => _Card(
-          player: players[i],
-          isActive: i == currentPlayerIndex,
-          onTap: () => PlayerStatsModal.show(ctx, players[i], gs),
+    // Clamp text scaling so a larger system font size can't make the
+    // card's content taller than the fixed-height strip it sits in.
+    final clampedMediaQuery = MediaQuery.of(context).copyWith(
+      textScaler: MediaQuery.of(context).textScaler.clamp(
+            minScaleFactor: 0.8,
+            maxScaleFactor: 1.1,
+          ),
+    );
+
+    return MediaQuery(
+      data: clampedMediaQuery,
+      child: SizedBox(
+        // Generous buffer above the card's real content height so no
+        // combination of font metrics/emoji glyph sizing can push
+        // things past the bottom.
+        height: 120,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: players.length,
+          itemBuilder: (ctx, i) => _Card(
+            player: players[i],
+            isActive: i == currentPlayerIndex,
+            onTap: () => PlayerStatsModal.show(ctx, players[i], gs),
+          ),
         ),
       ),
     );
@@ -70,21 +85,14 @@ class _Card extends StatelessWidget {
               ? [BoxShadow(color: player.color.withValues(alpha: 0.5), blurRadius: 16, offset: const Offset(0, 4))]
               : null,
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        child: SingleChildScrollView(
+          // Belt-and-braces: if content is ever a pixel or two taller
+          // than the card (a long name wrapping, a bigger emoji glyph,
+          // etc.) this quietly scrolls instead of throwing Flutter's
+          // red/black "BOTTOM OVERFLOWED" debug banner.
+          physics: const ClampingScrollPhysics(),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Row(children: [
-            // Traffic light: green for the active player's turn, red otherwise.
-            Container(
-              width: 9, height: 9,
-              margin: const EdgeInsets.only(right: 5),
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.success : AppColors.danger,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 1),
-                boxShadow: [BoxShadow(
-                    color: (isActive ? AppColors.success : AppColors.danger).withValues(alpha: 0.8),
-                    blurRadius: isActive ? 6 : 2)],
-              ),
-            ),
             Container(
               width: 30, height: 30,
               decoration: BoxDecoration(
@@ -124,7 +132,8 @@ class _Card extends StatelessWidget {
             if (player.hasShield) ...[const SizedBox(width: 6), const Text('🛡️', style: TextStyle(fontSize: 11))],
             if (player.skipNextTurn) ...[const SizedBox(width: 6), const Text('⏭️', style: TextStyle(fontSize: 11))],
           ]),
-        ]),
+          ]),
+        ),
       ),
     );
   }

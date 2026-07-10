@@ -29,6 +29,10 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
   final List<TextEditingController> _nameControllers =
       List.generate(7, (_) => TextEditingController());
 
+  // Each player's chosen favourite colour, by index into
+  // AppColors.playerColors. Defaults to a unique colour per player.
+  final List<int> _colorIndices = List.generate(7, (i) => i);
+
   @override
   void initState() {
     super.initState();
@@ -48,10 +52,9 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 
   void _startGame() {
     final List<PlayerModel> players = [];
-
-    // Dynamic cash formula: scale economy based on available plots and players
-    final double dynamicStartingCash = (_boardSize * 1000000.0) / _playerCount;
-    final double dynamicStartingBank = dynamicStartingCash * 0.66;
+    final startMoney =
+        AppConstants.startingMoneyByPlayers[_playerCount] ??
+        AppConstants.startingMoneyByPlayers[4]!;
 
     for (int i = 0; i < _playerCount; i++) {
       final name = _nameControllers[i].text.trim().isEmpty
@@ -60,13 +63,8 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       players.add(PlayerModel(
         id: 'player_$i',
         displayName: name,
-        money: dynamicStartingCash,
-        bankBalance: dynamicStartingBank,
-        farms: List.generate(
-          AppConstants.startingFarmsPerPlayer,
-          (f) => FarmModel(id: 'starter_farm_${i}_$f', level: 1),
-        ),
-        colorIndex: i,
+        money: startMoney,
+        colorIndex: _colorIndices[i],
       ));
     }
 
@@ -97,31 +95,29 @@ Navigator.of(context).push(
         backgroundColor: AppColors.appBg,
       ),
       backgroundColor: AppColors.appBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle('Board Size'),
-              _buildBoardSizeSelector(),
-              const SizedBox(height: 20),
-              _sectionTitle('Number of Players'),
-              _buildPlayerCountSelector(),
-              const SizedBox(height: 20),
-              _sectionTitle('Player Names'),
-              _buildPlayerNameFields(),
-              const SizedBox(height: 20),
-              _sectionTitle('End Game After'),
-              _buildEndRoundSelector(),
-              const SizedBox(height: 20),
-              _sectionTitle('Game Features'),
-              _buildToggles(),
-              const SizedBox(height: 32),
-              _buildStartButton(),
-              const SizedBox(height: 20),
-            ],
-          ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle('Board Size'),
+            _buildBoardSizeSelector(),
+            const SizedBox(height: 20),
+            _sectionTitle('Number of Players'),
+            _buildPlayerCountSelector(),
+            const SizedBox(height: 20),
+            _sectionTitle('Player Names'),
+            _buildPlayerNameFields(),
+            const SizedBox(height: 20),
+            _sectionTitle('End Game After'),
+            _buildEndRoundSelector(),
+            const SizedBox(height: 20),
+            _sectionTitle('Game Features'),
+            _buildToggles(),
+            const SizedBox(height: 32),
+            _buildStartButton(),
+            const SizedBox(height: 20),
+          ],
         ),
       ),
     );
@@ -221,26 +217,109 @@ Navigator.of(context).push(
   Widget _buildPlayerNameFields() {
     return Column(
       children: List.generate(_playerCount, (i) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: TextField(
-            controller: _nameControllers[i],
-            style: const TextStyle(color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Player ${i + 1} name',
-              prefixIcon: CircleAvatar(
-                radius: 14,
-                backgroundColor: AppColors.playerColors[i],
-                child: Text(
-                  '${i + 1}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.appCard,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.appBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _nameControllers[i],
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Player ${i + 1} name',
+                  prefixIcon: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: AppColors.playerColors[_colorIndices[i]],
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 12, 8),
+                child: Row(
+                  children: [
+                    const Text('Colour',
+                        style: TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    ...List.generate(AppColors.playerColors.length, (c) {
+                      final selected = _colorIndices[i] == c;
+                      // A colour already chosen by another active player
+                      // can't be picked again.
+                      final takenByOther = _colorIndices
+                          .asMap()
+                          .entries
+                          .any((e) =>
+                              e.key != i && e.key < _playerCount && e.value == c);
+                      return GestureDetector(
+                        onTap: takenByOther
+                            ? null
+                            : () => setState(() => _colorIndices[i] = c),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: selected ? 30 : 24,
+                          height: selected ? 30 : 24,
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.playerColors[c]
+                                .withValues(alpha: takenByOther ? 0.25 : 1.0),
+                            shape: BoxShape.circle,
+                            // A dark outer ring first, then a white inner
+                            // ring — this "target" pattern reads clearly
+                            // as selected no matter how light or dark the
+                            // swatch colour itself is (a plain white ring
+                            // used to disappear against pale colours like
+                            // gold).
+                            border: Border.all(
+                              color: selected ? Colors.white : Colors.transparent,
+                              width: selected ? 3 : 0,
+                            ),
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF0D0D1A),
+                                      blurRadius: 0,
+                                      spreadRadius: 1.5,
+                                    ),
+                                    BoxShadow(
+                                      color: AppColors.playerColors[c]
+                                          .withValues(alpha: 0.7),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check,
+                                  size: 16, color: Colors.white)
+                              : (takenByOther
+                                  ? const Icon(Icons.close,
+                                      size: 12, color: Colors.white54)
+                                  : null),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       }),

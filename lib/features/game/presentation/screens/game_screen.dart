@@ -1,4 +1,3 @@
-import 'dart:math' show pi;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -9,7 +8,6 @@ import '../../domain/models/player_model.dart';
 import '../providers/game_provider.dart';
 import 'package:flutter/material.dart';
 import '../widgets/board/game_board_widget.dart';
-import '../widgets/dice/dice_widget.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   final GameStateModel? initialState;
@@ -38,13 +36,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ref.read(gameProvider.notifier).initGame(widget.initialState!));
     }
     _diceCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900));
+        vsync: this, duration: const Duration(milliseconds: 700));
     _logCtrl  = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 280));
     _toastCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
 
-    _diceAnim = CurvedAnimation(parent: _diceCtrl, curve: Curves.easeOutCubic);
+    _diceAnim = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.2),  weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.2, end: -0.2), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: -0.2, end: 0.1), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.1, end: 0.0),  weight: 25),
+    ]).animate(CurvedAnimation(parent: _diceCtrl, curve: Curves.easeInOut));
 
     _logSlide = Tween<Offset>(
         begin: const Offset(1.0, 0), end: Offset.zero)
@@ -64,22 +67,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   // ── Toast notification ────────────────────────────────────────────
-  int _toastGen = 0;
   void _showToast(String msg) async {
-    final gen = ++_toastGen;
     setState(() => _toastMsg = msg);
     _toastCtrl.forward(from: 0);
-    await Future.delayed(const Duration(seconds: 5));
-    // Only the most recently shown toast is allowed to dismiss — if a
-    // newer one fired in the meantime (or the user already tapped this
-    // one away), this stale timer backs off instead of cutting the new
-    // message short.
-    if (mounted && gen == _toastGen) _dismissToast();
-  }
-
-  void _dismissToast() {
-    if (!mounted) return;
-    _toastCtrl.reverse();
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) _toastCtrl.reverse();
   }
 
   // ── Log panel ─────────────────────────────────────────────────────
@@ -100,51 +92,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // exactly like a Ludo piece, instead of teleporting to the final tile.
     await ref.read(gameProvider.notifier).rollDice(ref);
 
-    // NOTE: gs.eventMessage is already surfaced persistently by _EventBanner
-    // (and, for Surprise / Lucky Wheel, by the detail modal too). Firing the
-    // toast here as well used to double- and triple-render the exact same
-    // string on screen at once. The toast is now reserved for one-off
-    // confirmations (e.g. purchase success) that don't already have a
-    // persistent banner of their own.
+    if (mounted) {
+      final msg = ref.read(gameProvider)?.eventMessage;
+      if (msg != null) _showToast(msg);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final gs = ref.watch(gameProvider);
     final isRolling = ref.watch(diceRollingProvider);
-
-    // Whenever a player freshly lands on Surprise / Lucky Wheel, pop up a
-    // full detail card automatically — landing on the tile used to just
-    // flash a one-line banner with no way to see what actually happened,
-    // which is why it felt "stuck". This also gives a single clear
-    // "Continue" action that ends the turn, instead of hunting for END.
-    ref.listen<GameStateModel?>(gameProvider, (prev, next) {
-      if (next == null) return;
-      final justResolved = next.eventMessage != null &&
-          !next.isMoving &&
-          (next.lastEvent == GameEvent.landedOnSurprise ||
-              next.lastEvent == GameEvent.landedOnLuckyWheel) &&
-          (prev?.eventMessage != next.eventMessage ||
-              prev?.lastEvent != next.lastEvent);
-      if (justResolved) {
-        _showSurpriseDetail(next.eventMessage!);
-      }
-
-      // Auto-dismiss the top event banner after a proper reading window
-      // instead of leaving it stuck on screen until the next roll — but
-      // give it long enough that "X purchased for ₹Y" or "Z paid rent"
-      // is actually readable, not a flash. Captures the exact message so
-      // a newer event that arrives in the meantime is never accidentally
-      // cleared early. The player can also tap the banner to dismiss it
-      // immediately (see _EventBanner's onTap).
-      if (next.eventMessage != null && next.eventMessage != prev?.eventMessage) {
-        final msg = next.eventMessage;
-        Future.delayed(const Duration(seconds: 6), () {
-          if (!mounted) return;
-          ref.read(gameProvider.notifier).clearEventMessage(msg);
-        });
-      }
-    });
 
     if (gs == null) {
       return const Scaffold(
@@ -165,21 +122,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
       body: SafeArea(
         child: Stack(children: [
           Column(children: [
-            _AppBar(gs: gs, onLogTap: _toggleLog, onBankTap: () => _showBankSheet(gs)),
+            _AppBar(gs: gs, onLogTap: _toggleLog),
             _TurnBanner(player: cur),
-            if (gs.eventMessage != null)
-              _EventBanner(
-                msg: gs.eventMessage!,
-                onDismiss: () => ref.read(gameProvider.notifier)
-                    .clearEventMessage(gs.eventMessage),
-              ),
+            if (gs.eventMessage != null) _EventBanner(msg: gs.eventMessage!),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
                 child: GameBoardWidget(
                   tiles: gs.tiles,
                   players: gs.players,
-                  currentPlayerId: cur.id,
                   centerWidget: _DiceArea(
                     gs: gs,
                     isRolling: isRolling,
@@ -195,23 +146,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     onRename: () => _showRenameSheet(gs, landedTile!),
                   ),
                   onLogTap: _toggleLog,
-                  onGoTap: () => _showGoInfo(gs),
                   highlightedTiles: gs.isMoving ? {cur.position} : const {},
-                  onTileTap: (tile) {
-                    // Every plot on the board is now clickable — property
-                    // and farm tiles open the new Plot Details sheet (who
-                    // owns it, what they paid, sell/auction actions); the
-                    // Bank tile keeps opening the Bank Details sheet; GO
-                    // opens the same info as tapping the GO tile itself.
-                    if (tile.type == TileType.bank) {
-                      _showBankSheet(gs);
-                    } else if (tile.type == TileType.property ||
-                        tile.type == TileType.farmZone) {
-                      _showPlotDetails(gs, tile);
-                    } else if (tile.type == TileType.start) {
-                      _showGoInfo(gs);
-                    }
-                  },
+                  currentPlayerId: cur.id,
                 ),
               ),
             ),
@@ -225,10 +161,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               top: 80, left: 16, right: 16,
               child: SlideTransition(
                 position: _toastSlide,
-                child: GestureDetector(
-                  onTap: _dismissToast,
-                  child: _Toast(msg: _toastMsg!),
-                ),
+                child: _Toast(msg: _toastMsg!),
               ),
             ),
 
@@ -250,26 +183,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
             ),
           ),
         ]),
-      ),
-    );
-  }
-
-  // ── Surprise / Lucky Wheel detail popup ─────────────────────────────
-  void _showSurpriseDetail(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _EventDetailModal(
-        message: message,
-        onContinue: () {
-          Navigator.pop(context);
-          final gs = ref.read(gameProvider);
-          // The player has now seen the detail — advance the turn for them
-          // instead of making them also find and tap a separate END button.
-          if (gs != null && !gs.isMoving && gs.lastEvent != GameEvent.none) {
-            ref.read(gameProvider.notifier).endTurn();
-          }
-        },
       ),
     );
   }
@@ -318,102 +231,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
-  // ── GO tile tap ───────────────────────────────────────────────────
-  // Shows who's currently parked there and reminds everyone what passing
-  // GO pays out. This used to be a toast — which meant it could vanish
-  // before it was even fully read. It's a proper bottom sheet now, so it
-  // stays up until the player actually closes it.
-  void _showGoInfo(GameStateModel gs) {
-    final salary = AppConstants.salaryByBoardSize[gs.boardSize] ??
-        AppConstants.defaultSalary;
-    final onGo = gs.players.where((p) => p.position == 0).toList();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.appCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.appBorder),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🏠', style: TextStyle(fontSize: 32)),
-            const SizedBox(height: 8),
-            const Text('MAIN ROAD',
-                style: TextStyle(color: AppColors.accent, fontSize: 14,
-                    fontWeight: FontWeight.w900, letterSpacing: 1)),
-            const SizedBox(height: 10),
-            Text('Passing GO pays every player ${_f(salary)}.',
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            if (onGo.isEmpty)
-              const Text('No one is parked on Main Road right now.',
-                  style: TextStyle(color: AppColors.textHint, fontSize: 12),
-                  textAlign: TextAlign.center)
-            else ...[
-              const Text('Parked here now:',
-                  style: TextStyle(color: AppColors.textHint, fontSize: 11)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6, runSpacing: 6, alignment: WrapAlignment.center,
-                children: onGo.map((p) => Chip(
-                  label: Text(p.displayName, style: const TextStyle(fontSize: 12)),
-                  backgroundColor: p.color.withValues(alpha: 0.18),
-                  side: BorderSide(color: p.color),
-                )).toList(),
-              ),
-            ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('GOT IT', style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Plot details (tap any tile) ──────────────────────────────────────
-  void _showPlotDetails(GameStateModel gs, TileModel tile) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _PlotDetailsSheet(
-        gs: gs,
-        tile: tile,
-        onSellToBank: (playerId, tileIndex) {
-          ref.read(gameProvider.notifier).sellToBank(playerId, tileIndex);
-        },
-        onSellToPlayer: (sellerId, buyerId, tileIndex, price) {
-          ref.read(gameProvider.notifier)
-              .sellToPlayer(sellerId, buyerId, tileIndex, price);
-        },
-      ),
-    );
-  }
-
   void _showBankSheet(GameStateModel gs) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _BankSheet(
-        playerId: gs.currentPlayer.id,
+        gs: gs,
         onDeposit: (id, amt) =>
             ref.read(gameProvider.notifier).depositToBank(id, amt),
         onWithdraw: (id, amt) =>
@@ -452,8 +276,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 class _AppBar extends StatelessWidget {
   final GameStateModel gs;
   final VoidCallback onLogTap;
-  final VoidCallback onBankTap;
-  const _AppBar({required this.gs, required this.onLogTap, required this.onBankTap});
+  const _AppBar({required this.gs, required this.onLogTap});
 
   @override
   Widget build(BuildContext context) {
@@ -479,30 +302,24 @@ class _AppBar extends StatelessWidget {
         _iconBtn('📖', () => _showRules(context)),
         const SizedBox(width: 4),
         // Bank
-        _iconBtn('🏦', onBankTap),
+        _iconBtn('🏦', () {
+          // handled by player strip
+        }),
         const SizedBox(width: 4),
-        // Log — teal gradient with high-contrast white text/icon so it
-        // stays legible against both light and dark board backgrounds.
+        // Log
         GestureDetector(
           onTap: onLogTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF00897B), Color(0xFF00D4AA)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ),
+              color: AppColors.appCard,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(color: const Color(0xFF00D4AA).withValues(alpha: 0.35),
-                    blurRadius: 8, offset: const Offset(0, 2)),
-              ],
+              border: Border.all(color: AppColors.appBorder),
             ),
             child: Row(children: const [
               Text('📋', style: TextStyle(fontSize: 13)),
-              SizedBox(width: 5),
-              Text('Log', style: TextStyle(
-                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+              SizedBox(width: 4),
+              Text('Log', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
             ]),
           ),
         ),
@@ -599,36 +416,22 @@ class _TurnBanner extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _EventBanner extends StatelessWidget {
   final String msg;
-  final VoidCallback? onDismiss;
-  const _EventBanner({required this.msg, this.onDismiss});
+  const _EventBanner({required this.msg});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onDismiss,
-    child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      padding: const EdgeInsets.fromLTRB(14, 7, 10, 7),
-      decoration: BoxDecoration(
-        color: AppColors.appCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.appBorder),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(msg,
-              style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
-                  fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-              maxLines: 2, overflow: TextOverflow.ellipsis),
-          ),
-          if (onDismiss != null) ...[
-            const SizedBox(width: 6),
-            const Icon(Icons.close, size: 14, color: AppColors.textHint),
-          ],
-        ],
-      ),
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    decoration: BoxDecoration(
+      color: AppColors.appCard,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: AppColors.appBorder),
     ),
+    child: Text(msg,
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 12,
+          fontWeight: FontWeight.w600),
+      textAlign: TextAlign.center,
+      maxLines: 2, overflow: TextOverflow.ellipsis),
   );
 }
 
@@ -692,44 +495,23 @@ class _DiceArea extends StatelessWidget {
   Widget build(BuildContext context) {
     if (_showBuy || _showRename) return _actionRow();
 
-    final playerColor = gs.currentPlayer.color;
-
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       AnimatedBuilder(
         animation: diceAnim,
-        builder: (_, child) {
-          // Smooth 3D tumble: a real perspective transform (not just a flat
-          // 2D rotate) so the die visibly spins through depth while
-          // rolling, then eases to a stop facing the camera.
-          final t = diceAnim.value;
-          final matrix = Matrix4.identity()
-            ..setEntry(3, 2, 0.0018) // perspective depth
-            ..rotateX(t * 4 * pi)
-            ..rotateY(t * 6 * pi);
-          return Transform(
-            alignment: Alignment.center,
-            transform: matrix,
-            child: child,
-          );
-        },
+        builder: (_, child) => Transform.rotate(angle: diceAnim.value, child: child),
         child: GestureDetector(
           onTap: _canRoll ? onRoll : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 350),
+          child: Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
-              // Dice face shifts to the active player's theme colour while
-              // it's their turn to roll, so everyone can tell at a glance
-              // whose roll is coming up next.
               gradient: LinearGradient(colors: _canRoll
-                  ? [playerColor, Color.lerp(playerColor, Colors.black, 0.35)!]
+                  ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
                   : [const Color(0xFF444444), const Color(0xFF333333)]),
               shape: BoxShape.circle,
               border: Border.all(color: _canRoll
-                  ? Color.lerp(playerColor, Colors.white, 0.35)!
-                  : Colors.grey, width: 2),
+                  ? const Color(0xFF42A5F5) : Colors.grey, width: 2),
               boxShadow: _canRoll ? [BoxShadow(
-                color: playerColor.withValues(alpha: 0.6),
+                color: const Color(0xFF1565C0).withValues(alpha: 0.6),
                 blurRadius: 12)] : [],
             ),
             child: Center(child: isRolling
@@ -760,17 +542,16 @@ class _DiceArea extends StatelessWidget {
     ]);
   }
 
-  Widget _actionRow() => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
+  Widget _actionRow() => Column(mainAxisAlignment: MainAxisAlignment.center,
     children: [
       if (_showBuy) ...[
-        Expanded(child: _btn('BUY', AppColors.success, onBuy)),
-        const SizedBox(width: 6),
-        Expanded(child: _btn('SKIP', AppColors.appCard, onSkip, txtColor: AppColors.textSecondary)),
+        _btn('BUY', AppColors.success, onBuy),
+        const SizedBox(height: 4),
+        _btn('SKIP', AppColors.appCard, onSkip, txtColor: AppColors.textSecondary),
       ] else if (_showRename) ...[
-        Expanded(child: _btn('RENAME', AppColors.accent, onRename, txtColor: Colors.black)),
-        const SizedBox(width: 6),
-        Expanded(child: _btn('END', AppColors.primary, onEndTurn)),
+        _btn('RENAME', AppColors.accent, onRename, txtColor: Colors.black),
+        const SizedBox(height: 4),
+        _btn('END', AppColors.primary, onEndTurn),
       ],
     ],
   );
@@ -780,8 +561,7 @@ class _DiceArea extends StatelessWidget {
     GestureDetector(
       onTap: fn,
       child: Container(
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         decoration: BoxDecoration(
           color: color, borderRadius: BorderRadius.circular(8),
           boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)],
@@ -804,166 +584,113 @@ class _PlayerStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = gs.players.map((p) => _PlayerCard(
-      player: p,
-      isActive: p.id == gs.currentPlayer.id,
-      ownedTiles: gs.tiles.where((t) => t.ownerId == p.id).toList(),
-      onBankTap: () => onBankTap(gs),
-      width: null, // fills whatever parent gives it (Expanded or SizedBox)
-    )).toList();
-
-    return Container(
-      height: 122, // was 118 — bumped to match _PlayerCard's new 106px height
-      decoration: const BoxDecoration(
-        // Dark bottom control bar
-        color: Color(0xFF14141F),
-        border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
+    // Clamp text scaling so a larger system/browser font size can't
+    // push this fixed-height strip's content past its bottom edge.
+    final clampedMediaQuery = MediaQuery.of(context).copyWith(
+      textScaler: MediaQuery.of(context).textScaler.clamp(
+            minScaleFactor: 0.8,
+            maxScaleFactor: 1.1,
+          ),
+    );
+    return MediaQuery(
+      data: clampedMediaQuery,
+      child: SizedBox(
+        // Was 95 — too tight once Net Worth/Cash/Bank(/Loan) rows plus
+        // the avatar row and the icon row are all laid out, which
+        // caused a permanent "BOTTOM OVERFLOWED" debug banner on every
+        // card. Generous buffer here so it can't happen again.
+        height: 122,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          children: [
+            ...gs.players.map((p) => _PlayerCard(
+              player: p,
+              isActive: p.id == gs.currentPlayer.id,
+              ownedTiles: gs.tiles.where((t) => t.ownerId == p.id).toList(),
+              onBankTap: () => onBankTap(gs),
+            )),
+          ],
+        ),
       ),
-       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: gs.players.length == 2
-          // 2-player layout: token box — 3D dice — token box, dice centered
-          // in the middle of the bottom bar as its own focal element.
-          ? Row(children: [
-              Expanded(child: cards[0]),
-              const SizedBox(width: 8),
-             BottomBarDice(color: Theme.of(context).primaryColor),
-              const SizedBox(width: 8),
-              Expanded(child: cards[1]),
-            ])
-          : ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                SizedBox(width: 155, child: cards[0]),
-                const SizedBox(width: 8),
-                BottomBarDice(color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                for (final c in cards.skip(1))
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: SizedBox(width: 155, child: c),
-                  ),
-              ],
-            ),
     );
   }
 }
 
-class _PlayerCard extends StatefulWidget {
+class _PlayerCard extends StatelessWidget {
   final PlayerModel player;
   final bool isActive;
   final List<TileModel> ownedTiles;
   final VoidCallback onBankTap;
-  final double? width; // null = fill parent (used inside Expanded)
 
   const _PlayerCard({required this.player, required this.isActive,
-    required this.ownedTiles, required this.onBankTap, this.width = 155});
-
-  @override
-  State<_PlayerCard> createState() => _PlayerCardState();
-}
-
-class _PlayerCardState extends State<_PlayerCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 900))
-    ..repeat(reverse: true);
-  late final Animation<double> _pulse =
-      Tween<double>(begin: 0.35, end: 1.0)
-          .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
-  }
+    required this.ownedTiles, required this.onBankTap});
 
   @override
   Widget build(BuildContext context) {
-    final player = widget.player;
-    final isActive = widget.isActive;
-    final ownedTiles = widget.ownedTiles;
-    final width = widget.width;
     final farmCount = ownedTiles.where((t) =>
         t.plotType == PlotType.farm || t.type == TileType.farmZone).length;
     final plotCount = ownedTiles.length - farmCount;
 
     return GestureDetector(
-      onTap: widget.onBankTap,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (_, child) => Container(
-          width: width,
-          // Fixed, generous height with tight internal spacing.
-          // Giving every row a fixed slot guarantees it always fits.
-          height: 106,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            // Uniform dark navy background whether resting or active —
-            // active turn is now communicated purely by the pulsing
-            // border glow below, not by a solid color fill.
-            color: AppColors.appCard,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isActive
-                  ? player.color.withValues(alpha: _pulse.value)
-                  : AppColors.appBorder,
-              width: isActive ? 2.5 : 1,
-            ),
-            boxShadow: isActive ? [BoxShadow(
-              color: player.color.withValues(alpha: 0.45 * _pulse.value),
-              blurRadius: 14,
-              spreadRadius: 1,
-            )] : [],
+      onTap: onBankTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: 155,
+        margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: isActive
+              ? [player.color.withValues(alpha: 0.28), player.color.withValues(alpha: 0.10)]
+              : [AppColors.appCard, AppColors.appCard]),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? player.color : AppColors.appBorder,
+            width: isActive ? 2 : 1,
           ),
-          child: child,
+          boxShadow: isActive ? [BoxShadow(
+            color: player.color.withValues(alpha: 0.35),
+            blurRadius: 10)] : [],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(children: [
-              Container(width: 24, height: 24,
-                decoration: BoxDecoration(color: player.color, shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5)),
-                child: Center(child: Text(
-                  player.displayName.isNotEmpty ? player.displayName[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontSize: 11,
-                      fontWeight: FontWeight.w900)))),
-              const SizedBox(width: 6),
-              Expanded(child: Text(player.displayName,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 10,
-                    fontWeight: FontWeight.w700),
-                overflow: TextOverflow.ellipsis)),
-              if (isActive)
-                const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
-            ]),
-            const SizedBox(height: 3),
-            _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
-            _row('Cash',      _f(player.money),    AppColors.success),
-            // Bank + Loan share one row so the card height never depends
-            // on whether the player currently has a loan.
-            Row(children: [
-              Expanded(child: _row('Bank', _f(player.bankBalance), AppColors.info)),
-              if (player.loanAmount > 0)
-                Expanded(child: _row('Loan', _f(player.loanAmount), AppColors.danger)),
-            ]),
-            const SizedBox(height: 3),
-            Row(children: [
-              const Text('🏠', style: TextStyle(fontSize: 9)),
-              Text(' $plotCount  ', style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 8)),
-              const Text('🌾', style: TextStyle(fontSize: 9)),
-              Text(' $farmCount', style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 8)),
-              const Spacer(),
-              if (player.hasShield)
-                const Text('🛡️', style: TextStyle(fontSize: 10)),
-              if (player.skipNextTurn) ...[
-                const SizedBox(width: 3),
-                const Text('⏭️', style: TextStyle(fontSize: 10)),
-              ],
-            ]),
-          ],
+        child: SingleChildScrollView(
+          // Belt-and-braces: if content is ever a pixel or two taller
+          // than the card (long name, loan row appearing, bigger
+          // glyph metrics) this quietly scrolls instead of showing
+          // Flutter's red/black "BOTTOM OVERFLOWED" debug banner.
+          physics: const ClampingScrollPhysics(),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Container(width: 26, height: 26,
+              decoration: BoxDecoration(color: player.color, shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.5)),
+              child: Center(child: Text(
+                player.displayName.isNotEmpty ? player.displayName[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white, fontSize: 12,
+                    fontWeight: FontWeight.w900)))),
+            const SizedBox(width: 6),
+            Expanded(child: Text(player.displayName,
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 10,
+                  fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis)),
+            if (isActive)
+              const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
+          ]),
+          const SizedBox(height: 4),
+          _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
+          _row('Cash',      _f(player.money),    AppColors.success),
+          _row('Bank',      _f(player.bankBalance), AppColors.info),
+          if (player.loanAmount > 0)
+            _row('Loan', _f(player.loanAmount),  AppColors.danger),
+          const SizedBox(height: 4),
+          Row(children: [
+            const Text('🏠', style: TextStyle(fontSize: 9)),
+            Text(' $plotCount  ', style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 8)),
+            const Text('🌾', style: TextStyle(fontSize: 9)),
+            Text(' $farmCount', style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 8)),
+          ]),
+          ]),
         ),
       ),
     );
@@ -972,11 +699,8 @@ class _PlayerCardState extends State<_PlayerCard>
   Widget _row(String label, String value, Color vColor, {bool bold = false}) =>
     Row(children: [
       Text('$label: ', style: const TextStyle(color: AppColors.textHint, fontSize: 7.5)),
-      Flexible(
-        child: Text(value, style: TextStyle(color: vColor, fontSize: bold ? 11.5 : 8.5,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w600),
-            overflow: TextOverflow.ellipsis),
-      ),
+      Text(value, style: TextStyle(color: vColor, fontSize: bold ? 12 : 8.5,
+          fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
     ]);
 
   String _f(double v) {
@@ -1201,39 +925,30 @@ class _StatGrid extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Bank Sheet
 // ─────────────────────────────────────────────────────────────────────────────
-class _BankSheet extends ConsumerStatefulWidget {
-  final String playerId;
+class _BankSheet extends StatefulWidget {
+  final GameStateModel gs;
   final void Function(String, double) onDeposit;
   final void Function(String, double) onWithdraw;
   final void Function(String, double) onLoan;
   final void Function(String, double) onRepay;
   final void Function(String, String, double) onTransfer;
 
-  const _BankSheet({required this.playerId, required this.onDeposit,
+  const _BankSheet({required this.gs, required this.onDeposit,
     required this.onWithdraw, required this.onLoan,
     required this.onRepay, required this.onTransfer});
 
   @override
-  ConsumerState<_BankSheet> createState() => _BankSheetState();
+  State<_BankSheet> createState() => _BankSheetState();
 }
 
-class _BankSheetState extends ConsumerState<_BankSheet>
+class _BankSheetState extends State<_BankSheet>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
   final _amtCtrl = TextEditingController();
   String? _selectedTransferTarget;
   String? _error;
 
-  // Live game state — re-read every time this sheet rebuilds (via
-  // ref.watch inside build(), see below) so balances always reflect the
-  // latest player data, even if it changes while the sheet stays open.
-  // This is what fixed the "Bank modal shows stale Cash" bug: the old
-  // version captured a GameStateModel once at the moment the sheet was
-  // opened and never looked at the provider again.
-  late GameStateModel _gs;
-  PlayerModel get _me =>
-      _gs.players.firstWhere((p) => p.id == widget.playerId,
-          orElse: () => _gs.currentPlayer);
+  PlayerModel get _me => widget.gs.currentPlayer;
 
   @override
   void initState() {
@@ -1251,9 +966,7 @@ class _BankSheetState extends ConsumerState<_BankSheet>
   double get _amt => double.tryParse(_amtCtrl.text) ?? 0;
 
   @override
-  Widget build(BuildContext context) {
-    _gs = ref.watch(gameProvider)!;
-    return DraggableScrollableSheet(
+  Widget build(BuildContext context) => DraggableScrollableSheet(
     initialChildSize: 0.72,
     maxChildSize: 0.92,
     builder: (_, ctrl) => Container(
@@ -1352,7 +1065,6 @@ class _BankSheetState extends ConsumerState<_BankSheet>
       ]),
     ),
   );
-  }
 
   Widget _bal(String label, String value, Color c) => Column(
     mainAxisSize: MainAxisSize.min,
@@ -1440,7 +1152,7 @@ class _BankSheetState extends ConsumerState<_BankSheet>
   ]);
 
   Widget _transferView() {
-    final others = _gs.players.where((p) => p.id != _me.id).toList();
+    final others = widget.gs.players.where((p) => p.id != _me.id).toList();
     return ListView(padding: const EdgeInsets.all(20), children: [
       const Text('Transfer Cash to Player', style: TextStyle(color: Colors.white70, fontSize: 13)),
       const SizedBox(height: 12),
@@ -1541,17 +1253,11 @@ class _BuySheetState extends State<_BuySheet> {
   final _nameCtrl  = TextEditingController();
   String _emoji    = '';
   String? _error;
-  late double _price;
-  final List<double> _priceOptions = List.generate(17, (i) => 1000000.0 + (i * 50000.0));
 
   @override
   void initState() {
     super.initState();
     _emoji = TileModel.suggestedEmojis(widget.tile.plotType).first;
-    // Default to the base price of the plot type, snapped to the nearest 50k option, 
-    // bounded between 10L and 18L.
-    double base = TileModel.fixedPrice(widget.tile.plotType).toDouble();
-    _price = _priceOptions.reduce((a, b) => (a - base).abs() < (b - base).abs() ? a : b);
   }
 
   @override
@@ -1562,8 +1268,9 @@ class _BuySheetState extends State<_BuySheet> {
 
   @override
   Widget build(BuildContext context) {
+    final price   = widget.tile.price ?? TileModel.fixedPrice(widget.tile.plotType);
     final balance = widget.gs.currentPlayer.money;
-    final canAfford = balance >= _price;
+    final canAfford = balance >= price;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.80,
@@ -1606,8 +1313,8 @@ class _BuySheetState extends State<_BuySheet> {
                 const SizedBox(height: 3),
                 const Text('PURCHASE PLOT', style: TextStyle(
                   color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w900)),
-                const Text('Price range: ₹10.00L – ₹18.00L',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 10,
+                Text('Bank price: ${_f(price)}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10,
                       fontWeight: FontWeight.w700)),
               ]),
             ]),
@@ -1641,15 +1348,24 @@ class _BuySheetState extends State<_BuySheet> {
               ),
               const SizedBox(height: 16),
               // Name
-              const Text('Plot Name', style: TextStyle(
-                  color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+              Row(
+                children: [
+                  const Text('Plot Name', style: TextStyle(
+                      color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text('(optional — leave blank for "${widget.tile.name}")',
+                      style: const TextStyle(
+                          color: AppColors.textHint, fontSize: 10.5,
+                          fontStyle: FontStyle.italic)),
+                ],
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _nameCtrl,
                 maxLength: 24,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: 'e.g. Vijay\'s Villa, Green Acres…',
+                  hintText: widget.tile.name,
                   hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 13),
                   counterStyle: const TextStyle(color: AppColors.textHint),
                   prefixText: '$_emoji  ',
@@ -1658,8 +1374,9 @@ class _BuySheetState extends State<_BuySheet> {
                 onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 14),
+              // Fixed bank price — no negotiation, same for every player
               Row(children: [
-                const Text('Price (₹)', style: TextStyle(
+                const Text('Plot Price (₹)', style: TextStyle(
                     color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text('Your cash: ${_f(balance)}',
@@ -1670,34 +1387,18 @@ class _BuySheetState extends State<_BuySheet> {
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                 decoration: BoxDecoration(
                   color: AppColors.appSurface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: canAfford ? AppColors.appBorder : AppColors.danger),
+                  border: Border.all(color: AppColors.appBorder),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<double>(
-                    value: _price,
-                    isExpanded: true,
-                    dropdownColor: AppColors.appSurface,
-                    icon: Icon(Icons.arrow_drop_down, color: canAfford ? AppColors.accent : AppColors.danger),
-                    items: _priceOptions.map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(_f(p), style: TextStyle(
-                        color: canAfford ? AppColors.accent : AppColors.danger,
-                        fontSize: 22, fontWeight: FontWeight.w900)),
-                    )).toList(),
-                    onChanged: (val) {
-                      if (val != null) setState(() => _price = val);
-                    },
-                  ),
-                ),
+                child: Text(_f(price), style: const TextStyle(
+                  color: AppColors.accent, fontSize: 22, fontWeight: FontWeight.w900)),
               ),
               if (!canAfford) ...[
                 const SizedBox(height: 8),
-                const Text('❌ You don\'t have enough cash for this plot',
+                const Text('❌ Insufficient funds for this plot',
                   style: TextStyle(color: AppColors.danger, fontSize: 12)),
               ],
               if (_error != null) ...[
@@ -1709,13 +1410,10 @@ class _BuySheetState extends State<_BuySheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: !canAfford ? null : () {
-                    final name = _nameCtrl.text.trim();
-                    if (name.isEmpty) {
-                      setState(() => _error = 'Please enter a plot name');
-                      return;
-                    }
+                    final typed = _nameCtrl.text.trim();
+                    final name = typed.isEmpty ? widget.tile.name : typed;
                     Navigator.pop(context);
-                    widget.onBuy(name, _price, _emoji);
+                    widget.onBuy(name, price, _emoji);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.success,
@@ -1846,409 +1544,6 @@ class _RenameSheetState extends State<_RenameSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Plot Details (tap any tile on the board)
-// ─────────────────────────────────────────────────────────────────────────────
-class _PlotDetailsSheet extends StatefulWidget {
-  final GameStateModel gs;
-  final TileModel tile;
-  final void Function(String playerId, int tileIndex) onSellToBank;
-  final void Function(String sellerId, String buyerId, int tileIndex, double price) onSellToPlayer;
-
-  const _PlotDetailsSheet({
-    required this.gs, required this.tile,
-    required this.onSellToBank, required this.onSellToPlayer,
-  });
-
-  @override
-  State<_PlotDetailsSheet> createState() => _PlotDetailsSheetState();
-}
-
-class _PlotDetailsSheetState extends State<_PlotDetailsSheet> {
-  bool _showSellToPlayer = false;
-  String? _buyerId;
-  final _priceCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _priceCtrl.dispose();
-    super.dispose();
-  }
-
-  String _f(double v) {
-    if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(2)}Cr';
-    if (v >= 100000)   return '₹${(v / 100000).toStringAsFixed(2)}L';
-    if (v >= 1000)     return '₹${(v / 1000).toStringAsFixed(1)}K';
-    return '₹${v.toStringAsFixed(0)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tile = widget.tile;
-    final gs = widget.gs;
-    final viewer = gs.currentPlayer;
-    final owner = tile.isOwned
-        ? gs.players.firstWhere((p) => p.id == tile.ownerId, orElse: () => viewer)
-        : null;
-    final isOwnerViewing = tile.isOwned && tile.ownerId == viewer.id;
-    final otherPlayers = gs.players.where((p) => p.id != viewer.id).toList();
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.appCard,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              Text(tile.displayEmoji.isNotEmpty ? tile.displayEmoji : '🏡',
-                  style: const TextStyle(fontSize: 28)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('${tile.plotNumber} · ${tile.plotTypeLabel}',
-                        style: const TextStyle(
-                            color: AppColors.textHint, fontSize: 11)),
-                    Text(
-                      tile.isOwned ? tile.displayName : 'Empty Plot',
-                      style: const TextStyle(color: AppColors.textPrimary,
-                          fontSize: 17, fontWeight: FontWeight.w900),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.close, color: AppColors.textSecondary),
-              ),
-            ]),
-            const SizedBox(height: 14),
-            if (tile.isOwned) ...[
-              _infoRow('Owner', owner?.displayName ?? '—', color: owner?.color),
-              _infoRow('Bought for', _f(tile.purchasePrice ?? tile.price ?? 0)),
-              _infoRow('Current value', _f(tile.currentValue)),
-              _infoRow('Development', tile.upgradeName),
-              if (tile.totalRentCollected > 0)
-                _infoRow('Rent collected', _f(tile.totalRentCollected)),
-              const SizedBox(height: 10),
-              _visitHistory(gs),
-              const SizedBox(height: 14),
-              if (isOwnerViewing)
-                _showSellToPlayer
-                    ? _sellToPlayerForm(otherPlayers)
-                    : Row(children: [
-                        Expanded(child: _actionBtn('Sell to Bank',
-                            AppColors.danger, () => _confirmSellToBank(context))),
-                        const SizedBox(width: 8),
-                        Expanded(child: _actionBtn('Auction to Player',
-                            AppColors.accent,
-                            () => setState(() => _showSellToPlayer = true),
-                            txtColor: Colors.black)),
-                      ])
-              else
-                Text(
-                  'Owned by ${owner?.displayName ?? "another player"}. '
-                  'Only they can sell or auction it.',
-                  style: const TextStyle(
-                      color: AppColors.textHint, fontSize: 12),
-                ),
-            ] else ...[
-              _infoRow('Listing price',
-                  _f(tile.price ?? TileModel.fixedPrice(tile.plotType))),
-              const SizedBox(height: 10),
-              _visitHistory(gs),
-              const SizedBox(height: 10),
-              const Text(
-                'This plot is unowned. Land on it on your turn to buy it.',
-                style: TextStyle(color: AppColors.textHint, fontSize: 12),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmSellToBank(BuildContext sheetCtx) {
-    final tile = widget.tile;
-    final payout = tile.currentValue * AppConstants.sellToBankRate;
-    showDialog(
-      context: sheetCtx,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: AppColors.appCard,
-        title: const Text('Sell to Bank?',
-            style: TextStyle(color: AppColors.textPrimary)),
-        content: Text(
-          'The Bank will pay ${_f(payout)} (75% of current value) and '
-          'the plot goes back on the market for anyone to buy fresh.',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogCtx);   // close confirm dialog
-              Navigator.pop(sheetCtx);    // close details sheet
-              widget.onSellToBank(widget.gs.currentPlayer.id, tile.index);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('SELL'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sellToPlayerForm(List<PlayerModel> otherPlayers) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('Sell to which player?',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: otherPlayers.map((p) => GestureDetector(
-            onTap: () => setState(() => _buyerId = p.id),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _buyerId == p.id
-                    ? p.color.withValues(alpha: 0.25)
-                    : AppColors.appSurface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _buyerId == p.id ? p.color : AppColors.appBorder,
-                  width: _buyerId == p.id ? 2 : 1,
-                ),
-              ),
-              child: Text(p.displayName,
-                  style: const TextStyle(color: AppColors.textPrimary,
-                      fontSize: 12, fontWeight: FontWeight.w700)),
-            ),
-          )).toList(),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _priceCtrl,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: const InputDecoration(hintText: 'Agreed price (₹)'),
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: TextButton(
-            onPressed: () => setState(() => _showSellToPlayer = false),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
-          )),
-          const SizedBox(width: 8),
-          Expanded(child: ElevatedButton(
-            onPressed: (_buyerId == null || _priceCtrl.text.trim().isEmpty)
-                ? null
-                : () {
-                    final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
-                    if (price <= 0) return;
-                    Navigator.pop(context);
-                    widget.onSellToPlayer(widget.gs.currentPlayer.id,
-                        _buyerId!, widget.tile.index, price);
-                  },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-            child: const Text('CONFIRM SALE',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)),
-          )),
-        ]),
-      ],
-    );
-  }
-
-  // Who has landed on this plot, and how many times each — lets players
-  // see the traffic pattern on a plot (e.g. "an opponent keeps landing
-  // here and paying me rent") at a glance.
-  Widget _visitHistory(GameStateModel gs) {
-    final tile = widget.tile;
-    if (tile.visits.isEmpty) {
-      return const Text(
-        'No one has visited this plot yet.',
-        style: TextStyle(color: AppColors.textHint, fontSize: 12, fontStyle: FontStyle.italic),
-      );
-    }
-    // Sort by visit count, most-frequent visitor first.
-    final entries = tile.visits.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text('Visited by',
-            style: TextStyle(color: AppColors.textHint, fontSize: 12)),
-        const SizedBox(height: 6),
-        ...entries.map((e) {
-          final player = gs.players.firstWhere((p) => p.id == e.key,
-              orElse: () => gs.players.first);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(children: [
-              Container(
-                width: 10, height: 10,
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(color: player.color, shape: BoxShape.circle),
-              ),
-              Expanded(
-                child: Text(player.displayName,
-                    style: const TextStyle(color: AppColors.textPrimary,
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-              ),
-              Text('${e.value}× visit${e.value == 1 ? '' : 's'}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-            ]),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _infoRow(String label, String value, {Color? color}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(children: [
-      Text(label, style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
-      const Spacer(),
-      if (color != null)
-        Container(
-          width: 10, height: 10,
-          margin: const EdgeInsets.only(right: 6),
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-      Flexible(
-        child: Text(value,
-            style: const TextStyle(color: AppColors.textPrimary,
-                fontSize: 13, fontWeight: FontWeight.w700),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
-      ),
-    ]),
-  );
-
-  Widget _actionBtn(String label, Color color, VoidCallback onTap,
-      {Color txtColor = Colors.white}) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
-      child: Text(label,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: txtColor, fontWeight: FontWeight.w800, fontSize: 11)),
-    ),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Surprise / Lucky Wheel Event Detail Modal
-// ─────────────────────────────────────────────────────────────────────────────
-class _EventDetailModal extends StatelessWidget {
-  final String message;
-  final VoidCallback onContinue;
-  const _EventDetailModal({required this.message, required this.onContinue});
-
-  @override
-  Widget build(BuildContext context) {
-    // Messages are authored as "<emoji(s)> <rest of sentence>" — split the
-    // leading icon off so it can be shown big, and the rest as body copy.
-    final trimmed = message.trim();
-    final spaceIdx = trimmed.indexOf(' ');
-    final icon = spaceIdx > 0 ? trimmed.substring(0, spaceIdx) : '🎁';
-    final body = spaceIdx > 0 ? trimmed.substring(spaceIdx + 1) : trimmed;
-    final isGood = trimmed.contains('🎉') || trimmed.contains('🏛️') ||
-        trimmed.contains('🌾') || trimmed.contains('💰') && !trimmed.contains('paid') ||
-        trimmed.contains('🛡️') || trimmed.contains('🔄');
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-              color: AppColors.accent.withValues(alpha: 0.55), width: 1.5),
-          boxShadow: [
-            BoxShadow(color: AppColors.accent.withValues(alpha: 0.35),
-                blurRadius: 32, spreadRadius: 2),
-          ],
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 84, height: 84,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                center: const Alignment(-0.3, -0.4),
-                colors: isGood
-                    ? [const Color(0xFFFFF3B0), const Color(0xFFFF9800)]
-                    : [const Color(0xFFFFC1B0), const Color(0xFFE74C3C)],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (isGood ? const Color(0xFFFF9800) : const Color(0xFFE74C3C))
-                      .withValues(alpha: 0.5),
-                  blurRadius: 20, spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Center(child: Text(icon, style: const TextStyle(fontSize: 36))),
-          ),
-          const SizedBox(height: 16),
-          Text(isGood ? 'LUCKY BREAK!' : 'SURPRISE EVENT',
-              style: TextStyle(
-                  color: isGood ? const Color(0xFFFFD54F) : const Color(0xFFFF8A80),
-                  fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 2)),
-          const SizedBox(height: 12),
-          Text(body,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 15,
-                  fontWeight: FontWeight.w600, height: 1.45)),
-          const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onContinue,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: const Text('CONTINUE',
-                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900,
-                      fontSize: 14, letterSpacing: 1)),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Rules Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 class _RulesSheet extends StatelessWidget {
@@ -2280,28 +1575,26 @@ class _RulesSheet extends StatelessWidget {
         Expanded(child: ListView(controller: ctrl,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           children: const [
-            _RuleSection('🎯 Goal',
-              'Buy plots, grow their value, and end the game with the most money. Money = your cash + bank savings + everything your plots are worth, minus any loans.'),
-            _RuleSection('🎲 Your Turn',
-              'Tap the dice to roll. Your token moves forward that many spaces. Whatever you land on decides what happens next — buy it, pay rent, or trigger a surprise.'),
+            _RuleSection('🎯 Objective',
+              'Build the richest real-estate empire by buying, naming, and developing plots in the township. The player with the highest Net Worth when all plots are sold wins!'),
+            _RuleSection('🎲 Taking a Turn',
+              'Tap the Dice button to roll. Your token moves forward through the lanes. Land on a plot to buy it, pay rent, or trigger a special event.'),
             _RuleSection('🏠 Buying a Plot',
-              'Land on an empty plot and you can buy it:\n• Give it a name\n• Pick an icon\n• Drag the slider to set your price — anywhere in the plot\'s price range\n• Tap Confirm\n\nLower price = more cash left for your next plot. Higher price = this plot is worth more later. Not enough cash and the Confirm button won\'t let you through.'),
+              'When you land on an unclaimed plot:\n• Enter your custom plot name\n• Choose an icon/emoji\n• Set your purchase price within the market range\n• Tap CONFIRM to purchase\n\nIf you can\'t afford it, you\'ll see "Insufficient Funds".'),
             _RuleSection('💰 Rent',
-              'Land on someone else\'s plot and you pay them 8% of what they paid for it.'),
-            _RuleSection('📈 Prices Go Up Over Time',
-              'After every full round, all owned plots quietly gain value:\n• Farms: +1%\n• Homes: +2%\n• Shops: +4%\n• Highway & premium plots: +5–6%\n\nHang onto plots and they grow — that\'s free money over time.'),
+              'If you land on another player\'s plot, you pay them 8% of their purchase price as rent. Owning multiple adjacent plots may increase rent in future updates.'),
+            _RuleSection('📈 Appreciation',
+              'At the end of each full round, all owned properties appreciate in value:\n• Farm: +1%\n• Residential: +2%\n• Commercial: +4%\n• Highway/Premium: +5-6%\n\nThis increases your Net Worth over time.'),
             _RuleSection('🌾 Farm Income',
-              'Own a farm? It pays you ₹2L every round, automatically. More farms = more steady income.'),
-            _RuleSection('🎁 Surprise Tiles',
-              'Land on a Surprise or Lucky tile and something random happens — a detail card pops up showing exactly what:\n✅ Good: cash bonus, grant, harvest payout\n❌ Bad: tax hit, storm damage, repair bill\n⚡ Other: a Shield, an extra turn, or getting moved back'),
-            _RuleSection('🎲6️⃣ Roll a 6, Land on Surprise',
-              'This one\'s guaranteed, not random: roll exactly a 6 and land on Surprise, and you skip your next turn.\n\nSince turns go in order, this means your opponent plays their normal turn — then plays again right away, because yours got skipped. So in a 2-player game, they effectively get two turns in a row before it\'s your turn again.'),
-            _RuleSection('🏦 The Bank',
-              'Tap the Bank tile on the board, or tap any player\'s card, to open it. From there you can:\n• Deposit cash to keep it safe\n• Withdraw cash back out\n• Take a loan for instant cash (pay it back with 5% interest)\n• Send money to another player'),
+              'Farm plots generate ₹2L passive income per round. Owning more farms means steady cash flow every round.'),
+            _RuleSection('🎁 Surprise Events',
+              'Landing on a Surprise or Lucky tile triggers a random event:\n✅ Positive: Lottery (₹10L), Grant (₹15L), Harvest (₹5L)\n❌ Negative: Tax Audit (-10%), Storm Damage (-7%), Maintenance (-₹3L)\n⚡ Special: Shield, Extra Turn, Move Back'),
+            _RuleSection('🏦 Banking',
+              'Tap any player card to open the Bank:\n• Deposit cash → earn safety\n• Withdraw → get cash back\n• Take Loan → instant cash (repay with 5% interest)\n• Transfer money to another player'),
             _RuleSection('🛡️ Shield',
-              'A Shield saves you from paying rent one time. The very next time you\'d owe rent, you pay nothing — then the Shield is used up.'),
-            _RuleSection('🏆 How the Game Ends',
-              'Once every plot on the board has been bought, the game is over. Whoever has the highest total money — cash, bank savings, and plot values combined, minus loans — wins.'),
+              'A Shield blocks the next rent payment. You\'ll need to pay rent again the following time you land on an owned plot.'),
+            _RuleSection('🏆 Winning',
+              'When all purchasable plots are sold, the game ends. Net Worth = Cash + Bank Balance + Total Property Value − Loans.\n\nThe player with the highest Net Worth wins!'),
           ],
         )),
       ]),

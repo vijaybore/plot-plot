@@ -10,7 +10,7 @@ class PlotTileCard extends StatefulWidget {
   final double width;
   final double height;
   final bool isHighlighted; // for movement animation
-  final String? currentPlayerId; // whose turn — shows the traffic light
+  final String? currentPlayerId; // whose turn it is, to pick out their token
   final VoidCallback? onTap;
 
   const PlotTileCard({
@@ -52,120 +52,70 @@ class _PlotTileCardState extends State<PlotTileCard>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: AnimatedBuilder(
-      animation: _glowAnim,
-      builder: (_, _) => Container(
-        width: widget.width,
-        height: widget.height,
-        margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-        decoration: BoxDecoration(
-          color: _bgColor(),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: widget.isHighlighted
-                ? AppColors.accent.withValues(alpha: _glowAnim.value)
-                : (widget.tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99)),
-            width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
+    // Clamp text scaling within the tile so a user's system/browser
+    // "large text" accessibility setting can't blow the fixed-size
+    // card open and trigger a "RenderFlex overflowed" error.
+    final clampedMediaQuery = MediaQuery.of(context).copyWith(
+      textScaler: MediaQuery.of(context).textScaler.clamp(
+            minScaleFactor: 0.8,
+            maxScaleFactor: 1.1,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: widget.isHighlighted
-                  ? AppColors.accent.withValues(alpha: 0.5 * _glowAnim.value)
-                  : (widget.tile.isOwned
-                      ? _ownerColor().withValues(alpha: 0.25)
-                      : Colors.black.withValues(alpha: 0.08)),
-              blurRadius: widget.isHighlighted ? 12 : 4,
-              spreadRadius: widget.isHighlighted ? 2 : 0,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(9),
-          // Everything below used to rely on hand-budgeted pixel heights.
-          // FittedBox removes that failure mode entirely: the
-          // content is measured at its natural (intrinsic) size and then
-          // scaled to fit the tile exactly. If it already fits, scale is
-          // 1.0 and nothing looks different. If it doesn't, it shrinks
-          // uniformly instead of throwing an overflow.
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              SizedBox(
-                width: widget.width,
-                height: widget.height,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: widget.width,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _topStrip(),
-                        _body(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (widget.players.isNotEmpty)
-                Positioned(
-                  bottom: 0, left: 2, right: 2,
-                  child: _playerTokens(),
-                ),
-              // Premium "SOLD" ribbon for owned plots — sized to the real
-              // (unscaled) tile box so it always sits crisply in the corner
-              // regardless of how much the FittedBox above had to shrink
-              // its content. Purely decorative: IgnorePointer keeps taps
-              // passing straight through to the tile underneath.
-              if (widget.tile.isOwned) _soldOverlay(),
-            ],
-          ),
-        ),
-      ),
-      ),
     );
-  }
 
-  // ── Premium "SOLD" ribbon ─────────────────────────────────────────
-  Widget _soldOverlay() {
-    final ownerColor = _ownerColor();
-    return Positioned(
-      top: 8,
-      right: -26,
-      child: IgnorePointer(
-        child: Transform.rotate(
-          angle: 0.785398, // 45 degrees
-          child: Container(
-            width: 90,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(vertical: 2),
+    return MediaQuery(
+      data: clampedMediaQuery,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedBuilder(
+          animation: _glowAnim,
+          builder: (_, _) => Container(
+            width: widget.width,
+            height: widget.height,
+            margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  ownerColor.withValues(alpha: 0.95),
-                  ownerColor.withValues(alpha: 0.75),
-                ],
+              color: _bgColor(),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: widget.isHighlighted
+                    ? AppColors.accent.withValues(alpha: _glowAnim.value)
+                    : (widget.tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99)),
+                width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
+                  color: widget.isHighlighted
+                      ? AppColors.accent.withValues(alpha: 0.5 * _glowAnim.value)
+                      : (widget.tile.isOwned
+                          ? _ownerColor().withValues(alpha: 0.25)
+                          : Colors.black.withValues(alpha: 0.08)),
+                  blurRadius: widget.isHighlighted ? 12 : 4,
+                  spreadRadius: widget.isHighlighted ? 2 : 0,
                 ),
               ],
             ),
-            child: const Text(
-              'SOLD',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 7.5,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              // Player tokens are drawn as an overlay pinned to the
+              // bottom of the card instead of a sibling flex child.
+              // That way they never add extra height on top of the
+              // card's fixed size — which was the cause of the
+              // "BOTTOM OVERFLOWED" error on tiles with players on them.
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      _topStrip(),
+                      Expanded(child: _body()),
+                    ],
+                  ),
+                  if (widget.players.isNotEmpty)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _playerTokens(),
+                    ),
+                ],
               ),
             ),
           ),
@@ -203,23 +153,19 @@ class _PlotTileCardState extends State<PlotTileCard>
     return Padding(
       padding: const EdgeInsets.fromLTRB(5, 4, 5, 3),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Row 1: plot number + type badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
-                child: Text(
-                  t.plotNumber,
-                  style: const TextStyle(
-                    color: Color(0xFF555555),
-                    fontSize: 7.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.3,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                t.plotNumber,
+                style: const TextStyle(
+                  color: Color(0xFF555555),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
                 ),
               ),
               Container(
@@ -245,12 +191,8 @@ class _PlotTileCardState extends State<PlotTileCard>
 
           const SizedBox(height: 4),
 
-          // Row 2: big emoji / building image — fixed-height slot instead
-          // of Expanded, since this Column is now intrinsically sized
-          // (mainAxisSize.min) inside the outer FittedBox rather than
-          // stretched to fill a flex parent.
-          SizedBox(
-            height: 34,
+          // Row 2: big emoji / building image
+          Expanded(
             child: Center(
               child: Text(
                 t.isOwned ? t.displayEmoji : _unownedEmoji(),
@@ -263,10 +205,11 @@ class _PlotTileCardState extends State<PlotTileCard>
 
           const SizedBox(height: 3),
 
-          // Row 3: name (hidden until bought)
+          // Row 3: name — shows the bank-listed name even before it's
+          // owned, so the tile never displays a generic placeholder.
           Center(
             child: Text(
-              t.isOwned ? t.displayName : 'Empty Plot',
+              t.displayName,
               style: TextStyle(
                 color: t.isOwned
                     ? const Color(0xFF1A1A2E)
@@ -371,30 +314,61 @@ class _PlotTileCardState extends State<PlotTileCard>
     ],
   );
 
-  // ── Player letter tokens at bottom ───────────────────────────────
-  // Clean 3D-stylized letter badges — no floating heads / full bodies.
-  // The active player's token gets a small traffic-light marker beside it
-  // to show whose turn it is right there on the board.
-  // Wrap (not Row) so multiple tokens on a tight tile wrap nicely to a 2nd line.
-  // The tile's own outer FittedBox (in build()) already scales the whole column
-  // down if it ever runs out of room, so nothing here needs its own SizedBox
-  // or its own nested FittedBox.
+  // ── Player letter tokens, pinned as a bottom overlay ──────────────
   Widget _playerTokens() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 2, bottom: 4, left: 3, right: 3),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 2,
-        runSpacing: 2,
-        children: widget.players.take(4).expand((p) {
-          final isCurrent = widget.currentPlayerId != null &&
-              p.id == widget.currentPlayerId;
-          return [
-            _TrafficLight3D(active: isCurrent),
-            _Token3D(letter: p.displayName.isNotEmpty
-                ? p.displayName.substring(0, 1).toUpperCase() : '?',
-                color: p.color),
-          ];
+    // Tokens shrink a little once more than 3 players share a tile so
+    // the row never needs more horizontal space than the card's width.
+    final count = widget.players.take(4).length;
+    final tokenSize = count > 3 ? 16.0 : 18.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 3),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.0),
+            Colors.black.withValues(alpha: 0.35),
+          ],
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: widget.players.take(4).map((p) {
+          final isCurrent = widget.currentPlayerId != null && p.id == widget.currentPlayerId;
+          return Container(
+          width: tokenSize,
+          height: tokenSize,
+          margin: const EdgeInsets.symmetric(horizontal: 1.5),
+          decoration: BoxDecoration(
+            color: p.color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isCurrent ? AppColors.accent : Colors.white,
+              width: isCurrent ? 2.2 : 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (isCurrent ? AppColors.accent : p.color).withValues(alpha: 0.6),
+                blurRadius: isCurrent ? 6 : 4,
+                spreadRadius: isCurrent ? 1 : 0,
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              p.displayName.isNotEmpty
+                  ? p.displayName.substring(0, 1).toUpperCase()
+                  : '?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: tokenSize > 17 ? 9 : 8,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        );
         }).toList(),
       ),
     );
@@ -402,11 +376,6 @@ class _PlotTileCardState extends State<PlotTileCard>
 
   // ── Helpers ───────────────────────────────────────────────────────
   String _unownedEmoji() {
-    // P-002–P-004 stay visually clean with no default icon (P-001 keeps
-    // its usual corner icon) — matches the requested "icon clean-up".
-    if (const ['P-002', 'P-003', 'P-004'].contains(widget.tile.plotNumber)) {
-      return '';
-    }
     switch (widget.tile.plotType) {
       case PlotType.farm:          return '🌾';
       case PlotType.commercial:    return '🏪';
@@ -427,18 +396,11 @@ class _PlotTileCardState extends State<PlotTileCard>
     if (widget.tile.type == TileType.luckyWheel) return const Color(0xFFFFFDE7);
     if (widget.tile.type == TileType.tax)        return const Color(0xFFFFEBEE);
     if (widget.tile.type == TileType.bank)       return const Color(0xFFE3F2FD);
-    // P-001–P-004 get a uniform light-cyan tint that matches the Bank
-    // tile, replacing their normal per-type color for this stretch of
-    // Lane 1 specifically.
-    if (_isFeaturedPlot) return const Color(0xFFE3F2FD);
     if (widget.tile.isOwned) {
       return widget.tile.plotTypeColor.withValues(alpha: 0.88);
     }
     return widget.tile.plotTypeColor.withValues(alpha: 0.28);
   }
-
-  bool get _isFeaturedPlot => const ['P-001', 'P-002', 'P-003', 'P-004']
-      .contains(widget.tile.plotNumber);
 
   Color _ownerColor() {
     final owner = widget.allPlayers
@@ -449,91 +411,6 @@ class _PlotTileCardState extends State<PlotTileCard>
         AppColors.playerColors.length;
     return AppColors.playerColors[idx];
   }
-}
-
-// ── 3D stylized letter token (replaces avatar-head / full-body pieces) ─────
-// A bold, glossy, circular badge with a bevel highlight and drop shadow so
-// it reads as a physical 3D playing piece rather than a flat icon.
-class _Token3D extends StatelessWidget {
-  final String letter;
-  final Color color;
-  const _Token3D({required this.letter, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 22,
-    height: 22,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: RadialGradient(
-        center: const Alignment(-0.35, -0.45),
-        radius: 1.1,
-        colors: [
-          Color.lerp(color, Colors.white, 0.55)!,
-          color,
-          Color.lerp(color, Colors.black, 0.30)!,
-        ],
-        stops: const [0.0, 0.55, 1.0],
-      ),
-      border: Border.all(color: Colors.white, width: 1.4),
-      boxShadow: [
-        BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 5),
-        const BoxShadow(color: Colors.black38, blurRadius: 2, offset: Offset(0, 2)),
-      ],
-    ),
-    child: Center(
-      child: Text(
-        letter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          shadows: [Shadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
-        ),
-      ),
-    ),
-  );
-}
-
-// ── 3D traffic light — green for whoever's turn it is, steady red for
-// whoever is waiting — right on the board next to each token, matching
-// how a physical board game would mark active vs. passive players.
-class _TrafficLight3D extends StatelessWidget {
-  final bool active;
-  const _TrafficLight3D({required this.active});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 10,
-    height: 22,
-    padding: const EdgeInsets.symmetric(vertical: 1.5, horizontal: 1.2),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [Color(0xFF3A3A3A), Color(0xFF1A1A1A)],
-      ),
-      borderRadius: BorderRadius.circular(2.5),
-      border: Border.all(color: const Color(0xFF0A0A0A), width: 0.6),
-      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 2, offset: Offset(0, 1))],
-    ),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _bulb(const Color(0xFFE53935), lit: !active), // red = waiting
-        _bulb(const Color(0xFFFFC107), lit: false),
-        _bulb(const Color(0xFF43A047), lit: active),  // green = your turn
-      ],
-    ),
-  );
-
-  Widget _bulb(Color color, {required bool lit}) => Container(
-    width: 6, height: 6,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: lit ? color : color.withValues(alpha: 0.25),
-      boxShadow: lit ? [BoxShadow(color: color, blurRadius: 4, spreadRadius: 0.5)] : null,
-    ),
-  );
 }
 
 // Legacy alias

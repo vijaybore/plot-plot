@@ -200,9 +200,9 @@ class _MainRoadHeader extends StatelessWidget {
                   Container(width: 30, height: 2, color: AppColors.secondary),
                 ]),
                 const SizedBox(height: 5),
-                // Turn-based traffic-light dots for every seated player:
-                // green + soft glow = it's their turn right now, solid red
-                // = waiting. Wrap so it never overflows however many
+                // Each seated player gets a dot in their own chosen
+                // colour; whoever's turn it is right now gets a gold
+                // glowing ring. Wrap so it never overflows however many
                 // players are at the table.
                 SizedBox(
                   height: 18,
@@ -245,37 +245,36 @@ class _MainRoadHeader extends StatelessWidget {
   }
 }
 
-// ── Header traffic-light dot: green + glow for the active player,
-// solid red for whoever is waiting their turn ──────────────────────────────
+// ── Header dot: always the player's own colour, with a gold glowing
+// ring around whoever's turn it is right now ────────────────────────
 class _TrafficDot extends StatelessWidget {
   final PlayerModel player;
   final bool isActive;
   const _TrafficDot({required this.player, required this.isActive});
 
-  static const _green = Color(0xFF00E676);
-  static const _red = Color(0xFFE53935);
-
   @override
   Widget build(BuildContext context) {
-    final light = isActive ? _green : _red;
     return Container(
       width: 16,
       height: 16,
       decoration: BoxDecoration(
-        color: light,
+        color: player.color,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 1.2),
+        border: Border.all(
+          color: isActive ? AppColors.accent : Colors.white,
+          width: isActive ? 2.2 : 1.2,
+        ),
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: _green.withValues(alpha: 0.85),
+                  color: AppColors.accent.withValues(alpha: 0.85),
                   blurRadius: 8,
                   spreadRadius: 1.5,
                 ),
               ]
             : [
                 BoxShadow(
-                  color: _red.withValues(alpha: 0.4),
+                  color: player.color.withValues(alpha: 0.4),
                   blurRadius: 2,
                 ),
               ],

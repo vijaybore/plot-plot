@@ -37,13 +37,13 @@ class AppColors {
 
   // ── Player token colors ──
   static const List<Color> playerColors = [
-    Color(0xFF2196F3),
-    Color(0xFFE74C3C),
-    Color(0xFF4CAF50),
-    Color(0xFFFFD700),
-    Color(0xFF9C27B0),
-    Color(0xFFFF5722),
-    Color(0xFF00BCD4),
+    Color(0xFF2196F3), // blue
+    Color(0xFFFF0000), // pure red
+    Color(0xFF4CAF50), // green
+    Color(0xFFFFD700), // gold
+    Color(0xFF9C27B0), // purple
+    Color(0xFFFF9800), // pure orange
+    Color(0xFF00BCD4), // cyan
   ];
 
   // ── Status ──
