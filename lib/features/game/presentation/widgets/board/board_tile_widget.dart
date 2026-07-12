@@ -73,7 +73,21 @@ class _PlotTileCardState extends State<PlotTileCard>
             height: widget.height,
             margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
             decoration: BoxDecoration(
-              color: _bgColor(),
+              color: widget.tile.isOwned ? null : _bgColor(),
+              // Owned plots fade from the plot-type tint at the top down
+              // into the owner's own color toward the bottom, so the card
+              // visually "belongs" to whoever bought it — same idea as the
+              // original SOLD-ribbon design's tinted look.
+              gradient: widget.tile.isOwned
+                  ? LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        widget.tile.plotTypeColor.withValues(alpha: 0.45),
+                        _ownerColor().withValues(alpha: 0.85),
+                      ],
+                    )
+                  : null,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: widget.isHighlighted
@@ -115,7 +129,59 @@ class _PlotTileCardState extends State<PlotTileCard>
                       bottom: 0,
                       child: _playerTokens(),
                     ),
+                  // Purely decorative corner ribbon — Positioned + IgnorePointer
+                  // so it never participates in layout sizing (that's what
+                  // caused the old overflow bug, not this ribbon itself).
+                  if (widget.tile.isOwned) _soldOverlay(),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Premium "SOLD" ribbon ─────────────────────────────────────────
+  // Diagonal corner banner in the owner's color. Positioned + IgnorePointer
+  // means it sits purely as a visual overlay and never affects the
+  // Column's layout/sizing — so it can't reintroduce the old overflow bug.
+  Widget _soldOverlay() {
+    final ownerColor = _ownerColor();
+    return Positioned(
+      top: 8,
+      right: -26,
+      child: IgnorePointer(
+        child: Transform.rotate(
+          angle: 0.785398, // 45 degrees
+          child: Container(
+            width: 90,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  ownerColor.withValues(alpha: 0.95),
+                  ownerColor.withValues(alpha: 0.75),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: const Text(
+              'SOLD',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 7.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
               ),
             ),
           ),

@@ -129,6 +129,58 @@ class GameStateModel extends Equatable {
     );
   }
 
+  Map<String, dynamic> toMap() => {
+    'gameId': gameId,
+    'players': players.map((p) => p.toMap()).toList(),
+    'tiles': tiles.map((t) => t.toMap()).toList(),
+    'currentPlayerIndex': currentPlayerIndex,
+    'phase': phase.name,
+    'lastEvent': lastEvent.name,
+    'boardSize': boardSize,
+    'finalRoundsTotal': finalRoundsTotal,
+    'finalRoundsCurrent': finalRoundsCurrent,
+    'roundsPlayed': roundsPlayed,
+    'eventMessage': eventMessage,
+    'isOnline': isOnline,
+    'activityLog': activityLog,
+    'adminId': adminId,
+    'lastDiceValue': lastDiceValue,
+    'isMoving': isMoving,
+    'customPriceMin': customPriceMin,
+    'customPriceMax': customPriceMax,
+  };
+
+  factory GameStateModel.fromMap(Map<String, dynamic> map) => GameStateModel(
+    gameId: map['gameId'] ?? '',
+    players: ((map['players'] as List?) ?? [])
+        .map((p) => PlayerModel.fromMap(Map<String, dynamic>.from(p)))
+        .toList(),
+    tiles: ((map['tiles'] as List?) ?? [])
+        .map((t) => TileModel.fromMap(Map<String, dynamic>.from(t)))
+        .toList(),
+    currentPlayerIndex: map['currentPlayerIndex'] ?? 0,
+    phase: GamePhase.values.firstWhere(
+      (p) => p.name == map['phase'],
+      orElse: () => GamePhase.waiting,
+    ),
+    lastEvent: GameEvent.values.firstWhere(
+      (e) => e.name == map['lastEvent'],
+      orElse: () => GameEvent.none,
+    ),
+    boardSize: map['boardSize'] ?? 25,
+    finalRoundsTotal: map['finalRoundsTotal'] ?? 5,
+    finalRoundsCurrent: map['finalRoundsCurrent'] ?? 0,
+    roundsPlayed: map['roundsPlayed'] ?? 0,
+    eventMessage: map['eventMessage'],
+    isOnline: map['isOnline'] ?? false,
+    activityLog: List<String>.from(map['activityLog'] ?? []),
+    adminId: map['adminId'],
+    lastDiceValue: map['lastDiceValue'],
+    isMoving: map['isMoving'] ?? false,
+    customPriceMin: map['customPriceMin']?.toDouble(),
+    customPriceMax: map['customPriceMax']?.toDouble(),
+  );
+
   @override
   List<Object?> get props => [
         gameId,

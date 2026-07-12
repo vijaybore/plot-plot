@@ -1,7 +1,12 @@
+import 'dart:async';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/multiplayer_service.dart';
+import '../../../multiplayer/presentation/providers/multiplayer_provider.dart';
+import '../../../multiplayer/presentation/widgets/chat_panel.dart';
 import '../../domain/models/game_state_model.dart';
 import '../../domain/models/tile_model.dart';
 import '../../domain/models/player_model.dart';
@@ -27,6 +32,95 @@ class _GameScreenState extends ConsumerState<GameScreen>
   late Animation<double>   _diceAnim;
   late Animation<Offset>   _logSlide;
   late Animation<Offset>   _toastSlide;
+
+  // ── Multiplayer ─────────────────────────────────────────────────
+  StreamSubscription<GameStateModel?>? _remoteStateSub;
+  StreamSubscription<DatabaseEvent>? _intentSub;
+  ProviderSubscription<GameStateModel?>? _broadcastSub;
+
+  bool get _isGuest {
+    final room = ref.read(multiplayerRoomProvider);
+    return room.isOnline && !room.isHost;
+  }
+
+  // Guests can only send intents for actions the game itself considers
+  // "your turn" ones (roll/buy/skip/end-turn/rename) — bank actions were
+  // already restricted to the current player by the existing BankSheet
+  // design, online or not.
+  bool _guestCanAct(GameStateModel gs) {
+    final room = ref.read(multiplayerRoomProvider);
+    if (gs.currentPlayer.id != room.localPlayerId) {
+      _showToast("⏳ It's not your turn yet");
+      return false;
+    }
+    return true;
+  }
+
+  void _sendIntent(String action, Map<String, dynamic> args) {
+    final room = ref.read(multiplayerRoomProvider);
+    if (room.roomCode == null) return;
+    MultiplayerService.instance.sendIntent(room.roomCode!, action, room.localPlayerId, args);
+  }
+
+  void _setupMultiplayer() {
+    final room = ref.read(multiplayerRoomProvider);
+    if (!room.isOnline || room.roomCode == null) return;
+
+    if (room.isHost) {
+      // Broadcast every local state change (from the real game logic
+      // running on this device) out to Firebase for everyone else.
+      _broadcastSub = ref.listenManual(gameProvider, (prev, next) {
+        if (next != null) {
+          MultiplayerService.instance.pushState(room.roomCode!, next);
+        }
+      });
+      // Apply actions non-host players send in, through the normal
+      // GameNotifier methods — same code path as local taps.
+      _intentSub = MultiplayerService.instance.listenForIntents(
+        room.roomCode!,
+        _handleRemoteIntent,
+      );
+    } else {
+      // Guests never run local game logic — just render whatever the
+      // host broadcasts.
+      _remoteStateSub = MultiplayerService.instance.watchState(room.roomCode!).listen((s) {
+        if (s != null) ref.read(gameProvider.notifier).initGame(s);
+      });
+    }
+  }
+
+  void _handleRemoteIntent(String action, String playerId, Map<String, dynamic> args) {
+    final notifier = ref.read(gameProvider.notifier);
+    switch (action) {
+      case 'rollDice':
+        notifier.rollDice(ref);
+      case 'buyProperty':
+        notifier.buyProperty(playerId,
+            customName: args['name'] ?? '',
+            price: (args['price'] as num).toDouble(),
+            customEmoji: args['emoji']);
+        notifier.endTurn();
+      case 'skipProperty':
+        notifier.skipProperty();
+        notifier.endTurn();
+      case 'endTurn':
+        notifier.endTurn();
+      case 'renamePlot':
+        notifier.renamePlot(playerId, args['tileIndex'] as int, args['name'] ?? '',
+            newEmoji: args['emoji']);
+        notifier.endTurn();
+      case 'depositToBank':
+        notifier.depositToBank(playerId, (args['amount'] as num).toDouble());
+      case 'withdrawFromBank':
+        notifier.withdrawFromBank(playerId, (args['amount'] as num).toDouble());
+      case 'takeLoan':
+        notifier.takeLoan(playerId, (args['amount'] as num).toDouble());
+      case 'repayLoan':
+        notifier.repayLoan(playerId, (args['amount'] as num).toDouble());
+      case 'transferMoney':
+        notifier.transferMoney(playerId, args['toId'] as String, (args['amount'] as num).toDouble());
+    }
+  }
 
   @override
   void initState() {
@@ -56,6 +150,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _toastSlide = Tween<Offset>(
         begin: const Offset(0, -1.5), end: Offset.zero)
         .animate(CurvedAnimation(parent: _toastCtrl, curve: Curves.easeOut));
+
+    _setupMultiplayer();
   }
 
   @override
@@ -63,6 +159,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _diceCtrl.dispose();
     _logCtrl.dispose();
     _toastCtrl.dispose();
+    _remoteStateSub?.cancel();
+    _intentSub?.cancel();
+    _broadcastSub?.close();
     super.dispose();
   }
 
@@ -82,6 +181,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   // ── Dice roll ────────────────────────────────────────────────────
   Future<void> _rollDice() async {
+    if (_isGuest) {
+      final gsNow = ref.read(gameProvider);
+      if (gsNow == null || !_guestCanAct(gsNow)) return;
+      _sendIntent('rollDice', {});
+      return;
+    }
     final gs = ref.read(gameProvider);
     if (gs == null) return;
     _diceCtrl.forward(from: 0);
@@ -123,6 +228,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
         child: Stack(children: [
           Column(children: [
             _AppBar(gs: gs, onLogTap: _toggleLog),
+            if (ref.watch(multiplayerRoomProvider).isOnline)
+              _RoomCodeBanner(roomCode: ref.watch(multiplayerRoomProvider).roomCode!),
             _TurnBanner(player: cur),
             if (gs.eventMessage != null) _EventBanner(msg: gs.eventMessage!),
             Expanded(
@@ -139,13 +246,27 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     landedTile: landedTile,
                     onBuy: () => _showBuySheet(gs, landedTile!),
                     onSkip: () {
+                      if (_isGuest) {
+                        if (!_guestCanAct(gs)) return;
+                        _sendIntent('skipProperty', {});
+                        return;
+                      }
                       ref.read(gameProvider.notifier).skipProperty();
                       ref.read(gameProvider.notifier).endTurn();
                     },
-                    onEndTurn: () => ref.read(gameProvider.notifier).endTurn(),
+                    onEndTurn: () {
+                      if (_isGuest) {
+                        if (!_guestCanAct(gs)) return;
+                        _sendIntent('endTurn', {});
+                        return;
+                      }
+                      ref.read(gameProvider.notifier).endTurn();
+                    },
                     onRename: () => _showRenameSheet(gs, landedTile!),
                   ),
                   onLogTap: _toggleLog,
+                  onGoTap: () => _onTileTap(gs, gs.tiles[0]),
+                  onTileTap: (tile) => _onTileTap(gs, tile),
                   highlightedTiles: gs.isMoving ? {cur.position} : const {},
                   currentPlayerId: cur.id,
                 ),
@@ -182,12 +303,51 @@ class _GameScreenState extends ConsumerState<GameScreen>
               child: _LogPanel(gs: gs, onClose: _toggleLog),
             ),
           ),
+
+          // Chat — only for online matches
+          if (ref.watch(multiplayerRoomProvider).isOnline)
+            Positioned(
+              right: 14,
+              bottom: 90,
+              child: ChatFab(
+                localPlayerId: ref.watch(multiplayerRoomProvider).localPlayerId,
+                localPlayerName: gs.players
+                    .where((p) => p.id == ref.watch(multiplayerRoomProvider).localPlayerId)
+                    .firstOrNull
+                    ?.displayName ?? 'Me',
+              ),
+            ),
         ]),
       ),
     );
   }
 
   // ── Sheets ────────────────────────────────────────────────────────
+  // ── Tile tap dispatcher ─────────────────────────────────────────
+  // Every tile on the board is tappable now — this is what was missing
+  // and caused GO / Bank / Surprise (and every plain plot) to do nothing
+  // when tapped. Bank opens the full bank sheet directly since that's
+  // already a rich feature; everything else opens the details sheet.
+  void _onTileTap(GameStateModel gs, TileModel tile) {
+    if (tile.type == TileType.bank) {
+      _showBankSheet(gs);
+      return;
+    }
+    _showTileDetailsSheet(gs, tile);
+  }
+
+  void _showTileDetailsSheet(GameStateModel gs, TileModel tile) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TileDetailsSheet(
+        tile: tile,
+        allPlayers: gs.players,
+      ),
+    );
+  }
+
   void _showBuySheet(GameStateModel gs, TileModel tile) {
     showModalBottomSheet(
       context: context,
@@ -197,6 +357,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
         gs: gs,
         tile: tile,
         onBuy: (name, price, emoji) {
+          if (_isGuest) {
+            if (!_guestCanAct(gs)) return;
+            _sendIntent('buyProperty', {'name': name, 'price': price, 'emoji': emoji});
+            _showToast('🏠 "$name" purchased for ${_f(price)}!');
+            return;
+          }
           ref.read(gameProvider.notifier).buyProperty(
             gs.currentPlayer.id,
             customName: name,
@@ -207,6 +373,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
           _showToast('🏠 "$name" purchased for ${_f(price)}!');
         },
         onSkip: () {
+          if (_isGuest) {
+            if (!_guestCanAct(gs)) return;
+            _sendIntent('skipProperty', {});
+            return;
+          }
           ref.read(gameProvider.notifier).skipProperty();
           ref.read(gameProvider.notifier).endTurn();
         },
@@ -222,6 +393,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
       builder: (_) => _RenameSheet(
         tile: tile,
         onSave: (name, emoji) {
+          if (_isGuest) {
+            if (!_guestCanAct(gs)) return;
+            _sendIntent('renamePlot', {'tileIndex': tile.index, 'name': name, 'emoji': emoji});
+            _showToast('✏️ Plot renamed to "$name"');
+            return;
+          }
           ref.read(gameProvider.notifier).renamePlot(
               gs.currentPlayer.id, tile.index, name, newEmoji: emoji);
           ref.read(gameProvider.notifier).endTurn();
@@ -238,16 +415,21 @@ class _GameScreenState extends ConsumerState<GameScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _BankSheet(
         gs: gs,
-        onDeposit: (id, amt) =>
-            ref.read(gameProvider.notifier).depositToBank(id, amt),
-        onWithdraw: (id, amt) =>
-            ref.read(gameProvider.notifier).withdrawFromBank(id, amt),
-        onLoan: (id, amt) =>
-            ref.read(gameProvider.notifier).takeLoan(id, amt),
-        onRepay: (id, amt) =>
-            ref.read(gameProvider.notifier).repayLoan(id, amt),
-        onTransfer: (from, to, amt) =>
-            ref.read(gameProvider.notifier).transferMoney(from, to, amt),
+        onDeposit: (id, amt) => _isGuest
+            ? _sendIntent('depositToBank', {'amount': amt})
+            : ref.read(gameProvider.notifier).depositToBank(id, amt),
+        onWithdraw: (id, amt) => _isGuest
+            ? _sendIntent('withdrawFromBank', {'amount': amt})
+            : ref.read(gameProvider.notifier).withdrawFromBank(id, amt),
+        onLoan: (id, amt) => _isGuest
+            ? _sendIntent('takeLoan', {'amount': amt})
+            : ref.read(gameProvider.notifier).takeLoan(id, amt),
+        onRepay: (id, amt) => _isGuest
+            ? _sendIntent('repayLoan', {'amount': amt})
+            : ref.read(gameProvider.notifier).repayLoan(id, amt),
+        onTransfer: (from, to, amt) => _isGuest
+            ? _sendIntent('transferMoney', {'toId': to, 'amount': amt})
+            : ref.read(gameProvider.notifier).transferMoney(from, to, amt),
       ),
     );
   }
@@ -373,6 +555,40 @@ class _AppBar extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Turn Banner
 // ─────────────────────────────────────────────────────────────────────────────
+class _RoomCodeBanner extends StatelessWidget {
+  final String roomCode;
+  const _RoomCodeBanner({required this.roomCode});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: roomCode));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Room code copied'), duration: Duration(seconds: 1)),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.wifi_tethering, color: AppColors.primary, size: 14),
+          const SizedBox(width: 6),
+          Text('Room: $roomCode', style: const TextStyle(
+              color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1)),
+          const SizedBox(width: 6),
+          const Icon(Icons.copy, color: AppColors.primary, size: 12),
+        ]),
+      ),
+    );
+  }
+}
+
 class _TurnBanner extends StatelessWidget {
   final PlayerModel player;
   const _TurnBanner({required this.player});
@@ -925,6 +1141,198 @@ class _StatGrid extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Bank Sheet
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Tile Details Sheet — opens for every tile tap (GO, Surprise, Tax, plots).
+// Bank taps skip this and go straight to the full _BankSheet instead.
+// ─────────────────────────────────────────────────────────────────────────────
+class _TileDetailsSheet extends StatelessWidget {
+  final TileModel tile;
+  final List<PlayerModel> allPlayers;
+  const _TileDetailsSheet({required this.tile, required this.allPlayers});
+
+  String _f(double v) {
+    if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(2)}Cr';
+    if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(2)}L';
+    if (v >= 1000) return '₹${(v / 1000).toStringAsFixed(1)}K';
+    return '₹${v.toStringAsFixed(0)}';
+  }
+
+  PlayerModel? _playerById(String? id) =>
+      allPlayers.where((p) => p.id == id).firstOrNull;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPlot = tile.type == TileType.property || tile.type == TileType.farmZone;
+    return DraggableScrollableSheet(
+      initialChildSize: isPlot ? 0.55 : 0.35,
+      minChildSize: 0.25,
+      maxChildSize: 0.85,
+      builder: (_, ctrl) => Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 10),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(children: [
+                Text(_headerEmoji(), style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_headerTitle(),
+                      style: const TextStyle(color: Colors.white, fontSize: 17,
+                          fontWeight: FontWeight.w900),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                GestureDetector(onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white70)),
+              ]),
+            ),
+            Expanded(
+              child: ListView(
+                controller: ctrl,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                children: isPlot ? _plotDetails() : _specialDetails(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _headerEmoji() {
+    switch (tile.type) {
+      case TileType.start:      return '🏠';
+      case TileType.surprise:   return '🎁';
+      case TileType.luckyWheel: return '🎡';
+      case TileType.tax:        return '💰';
+      default:                  return '📍';
+    }
+  }
+
+  String _headerTitle() {
+    switch (tile.type) {
+      case TileType.start:      return 'GO — Starting Point';
+      case TileType.surprise:   return 'Surprise Tile';
+      case TileType.luckyWheel: return 'Lucky Spin';
+      case TileType.tax:        return 'City Tax';
+      default:                  return '${tile.plotNumber} · ${tile.displayName}';
+    }
+  }
+
+  // ── Special (non-purchasable) tile info ───────────────────────────
+  List<Widget> _specialDetails() {
+    String desc;
+    switch (tile.type) {
+      case TileType.start:
+        desc = 'Every player begins the match here. Landing on or passing '
+            'GO on a future lap collects the usual GO bonus.';
+      case TileType.surprise:
+        desc = 'A random event tile — landing here can hand out a bonus '
+            'or a penalty, decided the moment a player lands on it.';
+      case TileType.luckyWheel:
+        desc = 'Spin for a random reward when a player lands here.';
+      case TileType.tax:
+        desc = 'Landing here charges a City Tax of '
+            '${(AppConstants.cityTaxRate * 100).toStringAsFixed(0)}% of the '
+            "player's current cash on hand.";
+      default:
+        desc = '';
+    }
+    return [
+      Text(desc, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+    ];
+  }
+
+  // ── Plot tile info: owner, visitors, purchase details, fixed price ─
+  List<Widget> _plotDetails() {
+    final owner = _playerById(tile.ownerId);
+    final visitEntries = tile.visits.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return [
+      _row('Plot Number', tile.plotNumber),
+      _row('Type', tile.plotTypeLabel),
+      const SizedBox(height: 8),
+      _sectionLabel('OWNER'),
+      if (owner != null)
+        _ownerTile(owner)
+      else
+        const Text('Unowned — available to purchase',
+            style: TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic)),
+      const SizedBox(height: 14),
+      _sectionLabel('PURCHASE DETAILS'),
+      _row('Fixed Price', tile.price != null ? _f(tile.price!) : '—'),
+      if (tile.isOwned) ...[
+        _row('Bought For', tile.purchasePrice != null ? _f(tile.purchasePrice!) : '—'),
+        _row('Development', tile.upgradeName),
+        _row('Current Rent', _f(tile.currentRent)),
+        _row('Rent Collected', _f(tile.totalRentCollected)),
+      ],
+      const SizedBox(height: 14),
+      _sectionLabel('VISITORS'),
+      if (visitEntries.isEmpty)
+        const Text('No one has visited this plot yet.',
+            style: TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic))
+      else
+        ...visitEntries.map((e) {
+          final p = _playerById(e.key);
+          return _visitorRow(p?.displayName ?? 'Unknown', p?.color ?? Colors.grey, e.value);
+        }),
+    ];
+  }
+
+  Widget _sectionLabel(String s) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(s, style: const TextStyle(color: Color(0xFFFFC107), fontSize: 11,
+        fontWeight: FontWeight.w800, letterSpacing: 1)),
+  );
+
+  Widget _row(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label, style: const TextStyle(color: Colors.white60, fontSize: 13)),
+      Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+    ]),
+  );
+
+  Widget _ownerTile(PlayerModel owner) => Row(children: [
+    Container(
+      width: 26, height: 26,
+      decoration: BoxDecoration(color: owner.color, shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.2)),
+      child: Center(
+        child: Text(
+          owner.displayName.isNotEmpty ? owner.displayName.substring(0, 1).toUpperCase() : '?',
+          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900),
+        ),
+      ),
+    ),
+    const SizedBox(width: 8),
+    Text(owner.displayName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+  ]);
+
+  Widget _visitorRow(String name, Color color, int count) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(children: [
+      Container(width: 10, height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      const SizedBox(width: 8),
+      Expanded(child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 13))),
+      Text('$count visit${count == 1 ? '' : 's'}',
+          style: const TextStyle(color: Colors.white60, fontSize: 12)),
+    ]),
+  );
+}
+
 class _BankSheet extends StatefulWidget {
   final GameStateModel gs;
   final void Function(String, double) onDeposit;

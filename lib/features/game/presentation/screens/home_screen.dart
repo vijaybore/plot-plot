@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import 'setup_game_screen.dart';
+import '../../../multiplayer/presentation/screens/lobby_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -204,7 +205,7 @@ class HomeScreen extends ConsumerWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const SetupGameScreen(isOnline: true),
+                    builder: (_) => const LobbyScreen(),
                   ),
                 ),
               ),

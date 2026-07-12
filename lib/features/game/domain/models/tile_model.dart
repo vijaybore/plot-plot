@@ -462,3 +462,25 @@ class TileFactory {
 class TileBuilder {
  static List<TileModel> buildTiles(int n) => TileFactory.build(n);
 }
+
+// ── Match Economy Helpers ────────────────────────────────────────────────
+// Derives each player's starting bank balance from the board itself, so
+// purchasing power always scales with however many plots (and whatever
+// prices) the current match actually has — rather than a fixed table.
+class MatchEconomy {
+  // Combined bank-set price of every plot created for this match.
+  // Only tiles with a price (property/farmZone plots) count — special
+  // tiles (START, TAX, BANK, SURPRISE) have no price and contribute 0.
+  static double totalPlotValue(List<TileModel> tiles) {
+    return tiles.fold<double>(0.0, (sum, t) => sum + (t.price ?? 0));
+  }
+
+  // Starting Balance Per Player = Total Value of All Plots ÷ Total Number
+  // of Players. Recomputed fresh from the current board/player count
+  // every time a match is started, so it always reflects whatever the
+  // number of plots, plot prices, or player count currently are.
+  static double startingBalancePerPlayer(List<TileModel> tiles, int playerCount) {
+    if (playerCount <= 0) return 0;
+    return totalPlotValue(tiles) / playerCount;
+  }
+}

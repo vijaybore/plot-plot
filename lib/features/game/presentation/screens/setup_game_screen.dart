@@ -8,6 +8,8 @@ import '../../../../features/game/domain/models/tile_model.dart';
 import '../../../../features/game/domain/models/game_state_model.dart';
 import 'game_screen.dart';
 import '../providers/game_provider.dart';
+import '../../../multiplayer/presentation/providers/multiplayer_provider.dart';
+import '../../../../core/services/multiplayer_service.dart';
 
 class SetupGameScreen extends ConsumerStatefulWidget {
   final bool isOnline;
@@ -50,7 +52,7 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
     super.dispose();
   }
 
-  void _startGame() {
+  Future<void> _startGame() async {
     final List<PlayerModel> players = [];
     final startMoney =
         AppConstants.startingMoneyByPlayers[_playerCount] ??
@@ -70,7 +72,7 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 
     final tiles = TileBuilder.buildTiles(_boardSize);
 
-    final gameState = GameStateModel(
+    var gameState = GameStateModel(
       gameId: 'offline_${DateTime.now().millisecondsSinceEpoch}',
       players: players,
       tiles: tiles,
@@ -79,14 +81,48 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
       isOnline: widget.isOnline,
       phase: GamePhase.playing,
     );
-ref.read(gameProvider.notifier).initGame(gameState);
 
-Navigator.of(context).push(
-  MaterialPageRoute(
-    builder: (_) => const GameScreen(),
-  ),
-);
-}
+    if (widget.isOnline) {
+      // The device that configures the match is the host — it keeps
+      // running the real game logic locally and broadcasts every change
+      // to Firebase; every other device only ever renders what's synced.
+      // Host defaults to controlling the first player slot.
+      try {
+        final roomCode = await MultiplayerService.instance.createRoom(
+          initialState: gameState,
+          hostId: players.first.id,
+        );
+        ref.read(multiplayerRoomProvider.notifier).setLocalPlayerId(players.first.id);
+        ref.read(multiplayerRoomProvider.notifier).setRoom(roomCode: roomCode, isHost: true);
+      } catch (e) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Online setup needed'),
+            content: const Text(
+              "Firebase isn't configured yet, so online rooms can't be "
+              'created. Run `flutterfire configure` from the project root '
+              'first — see the setup notes.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
+    ref.read(gameProvider.notifier).initGame(gameState);
+
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const GameScreen(),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
