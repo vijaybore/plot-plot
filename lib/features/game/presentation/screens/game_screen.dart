@@ -8,11 +8,13 @@ import '../../../../core/services/multiplayer_service.dart';
 import '../../../multiplayer/presentation/providers/multiplayer_provider.dart';
 import '../../../multiplayer/presentation/widgets/chat_panel.dart';
 import '../../domain/models/game_state_model.dart';
+import '../../../../core/services/sound_service.dart';
 import '../../domain/models/tile_model.dart';
 import '../../domain/models/player_model.dart';
 import '../providers/game_provider.dart';
 import 'package:flutter/material.dart';
 import '../widgets/board/game_board_widget.dart';
+import '../widgets/dice/dice_3d_widget.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   final GameStateModel? initialState;
@@ -23,15 +25,17 @@ class GameScreen extends ConsumerStatefulWidget {
 }
 
 class _GameScreenState extends ConsumerState<GameScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _showLog    = false;
   String? _toastMsg;
-  late AnimationController _diceCtrl;
   late AnimationController _logCtrl;
   late AnimationController _toastCtrl;
-  late Animation<double>   _diceAnim;
   late Animation<Offset>   _logSlide;
   late Animation<Offset>   _toastSlide;
+  // Bumped on every roll so the 3D dice cube knows to tumble again —
+  // the cube manages its own rotation animation internally, this is
+  // just the trigger.
+  int _rollTrigger = 0;
 
   // ── Multiplayer ─────────────────────────────────────────────────
   StreamSubscription<GameStateModel?>? _remoteStateSub;
@@ -125,23 +129,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.initialState != null) {
       Future.microtask(() =>
           ref.read(gameProvider.notifier).initGame(widget.initialState!));
     }
-    _diceCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 700));
+    // Kick off the looping game-music track the moment the board appears.
+    SoundService.instance.playBackgroundMusic();
     _logCtrl  = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 280));
     _toastCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
-
-    _diceAnim = TweenSequence([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.2),  weight: 25),
-      TweenSequenceItem(tween: Tween(begin: 0.2, end: -0.2), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: -0.2, end: 0.1), weight: 25),
-      TweenSequenceItem(tween: Tween(begin: 0.1, end: 0.0),  weight: 25),
-    ]).animate(CurvedAnimation(parent: _diceCtrl, curve: Curves.easeInOut));
 
     _logSlide = Tween<Offset>(
         begin: const Offset(1.0, 0), end: Offset.zero)
@@ -156,13 +154,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   @override
   void dispose() {
-    _diceCtrl.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    SoundService.instance.stopBackgroundMusic();
     _logCtrl.dispose();
     _toastCtrl.dispose();
     _remoteStateSub?.cancel();
     _intentSub?.cancel();
     _broadcastSub?.close();
     super.dispose();
+  }
+
+  // Pause music when the app is backgrounded, resume when it's back in
+  // the foreground — otherwise the track keeps playing behind the OS UI.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      SoundService.instance.pauseBackgroundMusic();
+    } else if (state == AppLifecycleState.resumed) {
+      SoundService.instance.resumeBackgroundMusic();
+    }
   }
 
   // ── Toast notification ────────────────────────────────────────────
@@ -184,12 +195,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (_isGuest) {
       final gsNow = ref.read(gameProvider);
       if (gsNow == null || !_guestCanAct(gsNow)) return;
+      setState(() => _rollTrigger++);
+      SoundService.instance.playDiceRoll();
       _sendIntent('rollDice', {});
       return;
     }
     final gs = ref.read(gameProvider);
     if (gs == null) return;
-    _diceCtrl.forward(from: 0);
+    setState(() => _rollTrigger++);
+    SoundService.instance.playDiceRoll();
 
     // rollDice() now writes the player's real position into game state one
     // tile at a time, so simply awaiting it is enough — the board rebuilds
@@ -241,7 +255,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                   centerWidget: _DiceArea(
                     gs: gs,
                     isRolling: isRolling,
-                    diceAnim: _diceAnim,
+                    rollTrigger: _rollTrigger,
                     onRoll: _rollDice,
                     landedTile: landedTile,
                     onBuy: () => _showBuySheet(gs, landedTile!),
@@ -678,7 +692,7 @@ class _Toast extends StatelessWidget {
 class _DiceArea extends StatelessWidget {
   final GameStateModel gs;
   final bool isRolling;
-  final Animation<double> diceAnim;
+  final int rollTrigger;
   final VoidCallback onRoll;
   final TileModel? landedTile;
   final VoidCallback onBuy;
@@ -687,7 +701,7 @@ class _DiceArea extends StatelessWidget {
   final VoidCallback onRename;
 
   const _DiceArea({
-    required this.gs, required this.isRolling, required this.diceAnim,
+    required this.gs, required this.isRolling, required this.rollTrigger,
     required this.onRoll, required this.landedTile,
     required this.onBuy, required this.onSkip,
     required this.onEndTurn, required this.onRename,
@@ -712,29 +726,20 @@ class _DiceArea extends StatelessWidget {
     if (_showBuy || _showRename) return _actionRow();
 
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      AnimatedBuilder(
-        animation: diceAnim,
-        builder: (_, child) => Transform.rotate(angle: diceAnim.value, child: child),
-        child: GestureDetector(
-          onTap: _canRoll ? onRoll : null,
-          child: Container(
-            width: 52, height: 52,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: _canRoll
-                  ? [const Color(0xFF1565C0), const Color(0xFF0D47A1)]
-                  : [const Color(0xFF444444), const Color(0xFF333333)]),
-              shape: BoxShape.circle,
-              border: Border.all(color: _canRoll
-                  ? const Color(0xFF42A5F5) : Colors.grey, width: 2),
-              boxShadow: _canRoll ? [BoxShadow(
-                color: const Color(0xFF1565C0).withValues(alpha: 0.6),
-                blurRadius: 12)] : [],
-            ),
-            child: Center(child: isRolling
-                ? const SizedBox(width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(_diceEmoji(gs.lastDiceValue ?? 1),
-                    style: const TextStyle(fontSize: 22))),
+      GestureDetector(
+        onTap: _canRoll ? onRoll : null,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: _canRoll ? [BoxShadow(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.45),
+              blurRadius: 14)] : [],
+          ),
+          child: Dice3D(
+            value: gs.lastDiceValue ?? 1,
+            rollTrigger: rollTrigger,
+            size: 52,
+            disabled: !_canRoll && !isRolling,
           ),
         ),
       ),
@@ -786,8 +791,6 @@ class _DiceArea extends StatelessWidget {
             fontSize: 9, fontWeight: FontWeight.w900)),
       ),
     );
-
-  String _diceEmoji(int v) => ['⚀','⚁','⚂','⚃','⚄','⚅'][(v-1).clamp(0,5)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

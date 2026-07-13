@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/sound_service.dart';
 import '../../domain/models/game_state_model.dart';
 import '../../domain/models/player_model.dart';
 import '../../domain/models/tile_model.dart';
@@ -68,6 +69,9 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
         players: gsNow.players.map((p) =>
             p.id == cur.id ? p.copyWith(position: stepPos) : p).toList(),
       );
+      // One "tap" per tile hopped — the Ludo-style click that lands right
+      // as the token visibly appears on the next tile.
+      SoundService.instance.playTokenMove();
       await Future.delayed(const Duration(milliseconds: 220));
     }
 

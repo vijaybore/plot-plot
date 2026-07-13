@@ -29,9 +29,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final repo = ref.read(authRepositoryProvider);
-      await repo.signInWithGoogle();
+      final user = await repo.signInWithGoogle();
+      if (user != null && mounted) {
+        ref.read(currentUserProvider.notifier).state = user;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
     } catch (e) {
-      setState(() => _error = 'Google Sign-In needs Firebase (Phase 5). Use Guest mode.');
+      setState(() => _error = 'Google Sign-In failed. Please try again or use Guest mode.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

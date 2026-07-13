@@ -49,12 +49,46 @@ class ChatPanel extends ConsumerStatefulWidget {
 class _ChatPanelState extends ConsumerState<ChatPanel> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _focusNode = FocusNode();
+  bool _showEmoji = false;
+
+  // Compact, commonly-used set — enough for casual game-chat reactions
+  // without pulling in a full emoji-picker package/dependency.
+  static const _emojis = [
+    '😀', '😂', '😅', '😉', '😍', '🤔', '😎', '😭',
+    '😡', '🥳', '😱', '🙄', '👍', '👎', '👏', '🙏',
+    '💪', '🤝', '🔥', '💰', '🏠', '🎲', '🏆', '💯',
+    '❤️', '💔', '⭐', '✅', '❌', '⏳', '🎉', '😴',
+  ];
 
   @override
   void dispose() {
     _textCtrl.dispose();
     _scrollCtrl.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _insertEmoji(String emoji) {
+    final text = _textCtrl.text;
+    final selection = _textCtrl.selection;
+    final cursor = selection.start >= 0 ? selection.start : text.length;
+    final newText = text.replaceRange(cursor, selection.end >= 0 ? selection.end : cursor, emoji);
+    _textCtrl.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: cursor + emoji.length),
+    );
+  }
+
+  void _toggleEmojiPicker() {
+    setState(() => _showEmoji = !_showEmoji);
+    if (_showEmoji) {
+      // Emoji panel is taking over the keyboard's screen space —
+      // dismiss the system keyboard so both don't fight for room.
+      _focusNode.unfocus();
+    } else {
+      _focusNode.requestFocus();
+    }
   }
 
   void _send() {
@@ -129,9 +163,11 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (!mine)
-                                    Text(m.senderName,
-                                        style: const TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w700)),
+                                  Text(mine ? 'You' : m.senderName,
+                                      style: TextStyle(
+                                          color: mine ? Colors.white70 : Colors.white60,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700)),
                                   Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 13)),
                                 ],
                               ),
@@ -145,12 +181,29 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).viewInsets.bottom + 12),
+              padding: EdgeInsets.fromLTRB(12, 8, 12, _showEmoji ? 8 : MediaQuery.of(context).viewInsets.bottom + 12),
               child: Row(
                 children: [
+                  // Toggle between the emoji grid and the system text keyboard —
+                  // mirrors the standard chat-app pattern (WhatsApp/Telegram),
+                  // so text and emoji both work through the same input bar.
+                  GestureDetector(
+                    onTap: _toggleEmojiPicker,
+                    child: Container(
+                      width: 42, height: 42,
+                      decoration: const BoxDecoration(color: AppColors.appSurface, shape: BoxShape.circle),
+                      child: Icon(
+                        _showEmoji ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _textCtrl,
+                      focusNode: _focusNode,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         hintText: 'Message…',
@@ -160,6 +213,11 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                       ),
+                      onTap: () {
+                        // Typing text should close the emoji grid and hand
+                        // focus back to the system keyboard.
+                        if (_showEmoji) setState(() => _showEmoji = false);
+                      },
                       onSubmitted: (_) => _send(),
                     ),
                   ),
@@ -174,6 +232,30 @@ class _ChatPanelState extends ConsumerState<ChatPanel> {
                   ),
                 ],
               ),
+            ),
+            // Expandable emoji grid — replaces the system keyboard's screen
+            // space when open, so the sheet doesn't grow taller than the
+            // keyboard would have.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              child: _showEmoji
+                  ? SizedBox(
+                      height: 220,
+                      child: GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 8,
+                        ),
+                        itemCount: _emojis.length,
+                        itemBuilder: (_, i) => GestureDetector(
+                          onTap: () => _insertEmoji(_emojis[i]),
+                          child: Center(
+                            child: Text(_emojis[i], style: const TextStyle(fontSize: 22)),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox(height: 0, width: double.infinity),
             ),
           ],
         ),

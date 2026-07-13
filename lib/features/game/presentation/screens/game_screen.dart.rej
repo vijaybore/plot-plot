@@ -1,0 +1,28 @@
+diff a/lib/features/game/presentation/screens/game_screen.dart b/lib/features/game/presentation/screens/game_screen.dart	(rejected hunks)
+@@ -60,12 +64,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
+ 
+   @override
+   void dispose() {
++    WidgetsBinding.instance.removeObserver(this);
++    SoundService.instance.stopBackgroundMusic();
+     _diceCtrl.dispose();
+     _logCtrl.dispose();
+     _toastCtrl.dispose();
+     super.dispose();
+   }
+ 
++  // Pause music when the app is backgrounded, resume when it's back in
++  // the foreground — otherwise the track keeps playing behind the OS UI.
++  @override
++  void didChangeAppLifecycleState(AppLifecycleState state) {
++    if (state == AppLifecycleState.paused ||
++        state == AppLifecycleState.inactive) {
++      SoundService.instance.pauseBackgroundMusic();
++    } else if (state == AppLifecycleState.resumed) {
++      SoundService.instance.resumeBackgroundMusic();
++    }
++  }
++
+   // ── Toast notification ────────────────────────────────────────────
+   void _showToast(String msg) async {
+     setState(() => _toastMsg = msg);
