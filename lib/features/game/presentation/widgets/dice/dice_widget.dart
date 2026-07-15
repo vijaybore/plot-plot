@@ -102,7 +102,7 @@ class _DiceWidgetState extends State<DiceWidget>
               ..rotateX(_shakeX.value)
               ..rotateY(_shakeY.value)
               ..rotateZ(_shakeZ.value)
-              ..scale(_bounce.value, _bounce.value, 1.0);
+              ..scaleByDouble(_bounce.value, _bounce.value, 1.0, 1.0);
             return Transform(
               transform: matrix,
               alignment: Alignment.center,

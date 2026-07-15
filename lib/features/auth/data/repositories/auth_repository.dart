@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+﻿import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../domain/models/user_model.dart';
@@ -43,17 +43,26 @@ class AuthRepository {
         userCred = await _firebaseAuth.signInWithPopup(provider);
       } else {
         await _ensureGoogleSignInReady();
-        final account = await _googleSignIn.authenticate();
-        if (account == null) return null;
+
+        // v7: authenticate() throws GoogleSignInException on cancel/failure
+        // instead of returning null, so we catch the cancellation case
+        // explicitly to preserve the old "return null on cancel" behavior.
+        final GoogleSignInAccount account;
+        try {
+          account = await _googleSignIn.authenticate();
+        } on GoogleSignInException catch (e) {
+          if (e.code == GoogleSignInExceptionCode.canceled) return null;
+          rethrow;
+        }
 
         final idToken = account.authentication.idToken;
         final authClient = account.authorizationClient;
-        final authorization = await authClient?.authorizationForScopes(['email']) ??
-            await authClient?.authorizeScopes(['email']);
+        final authorization = await authClient.authorizationForScopes(['email']) ??
+            await authClient.authorizeScopes(['email']);
 
         final credential = fb_auth.GoogleAuthProvider.credential(
           idToken: idToken,
-          accessToken: authorization?.accessToken,
+          accessToken: authorization.accessToken,
         );
         userCred = await _firebaseAuth.signInWithCredential(credential);
       }
