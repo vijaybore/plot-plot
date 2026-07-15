@@ -16,6 +16,10 @@ class SoundService {
   final AudioPlayer _musicPlayer = AudioPlayer(playerId: 'bgm');
   final AudioPlayer _sfxPlayer = AudioPlayer(playerId: 'sfx');
   final AudioPlayer _movePlayer = AudioPlayer(playerId: 'move');
+  final AudioPlayer _clickPlayer = AudioPlayer(playerId: 'click');
+  final AudioPlayer _cashPlayer = AudioPlayer(playerId: 'cash');
+  final AudioPlayer _rattlePlayer = AudioPlayer(playerId: 'rattle');
+  final AudioPlayer _clackPlayer = AudioPlayer(playerId: 'clack');
 
   bool musicEnabled = true;
   bool sfxEnabled = true;
@@ -26,9 +30,14 @@ class SoundService {
     if (_musicStarted) return;
     _musicStarted = true;
     await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+    await _rattlePlayer.setReleaseMode(ReleaseMode.loop);
     await _musicPlayer.setVolume(0.35);
     await _sfxPlayer.setVolume(1.0);
     await _movePlayer.setVolume(0.8);
+    await _clickPlayer.setVolume(0.6);
+    await _cashPlayer.setVolume(0.8);
+    await _rattlePlayer.setVolume(1.0);
+    await _clackPlayer.setVolume(1.0);
   }
 
   /// Starts (or resumes) the looping background track. Safe to call
@@ -83,6 +92,31 @@ class SoundService {
     await _movePlayer.play(AssetSource('sounds/token_move.mp3'));
   }
 
+  Future<void> playButtonClick() async {
+    if (!sfxEnabled) return;
+    await _clickPlayer.stop();
+    await _clickPlayer.play(AssetSource('sounds/button_click.mp3'));
+  }
+
+  Future<void> playCashRegister() async {
+    if (!sfxEnabled) return;
+    await _cashPlayer.stop();
+    await _cashPlayer.play(AssetSource('sounds/cash_register.mp3'));
+  }
+
+  Future<void> playDiceRattle() async {
+    if (!sfxEnabled) return;
+    await _clackPlayer.stop();
+    await _rattlePlayer.play(AssetSource('sounds/dice_rattle.mp3'));
+  }
+
+  Future<void> playDiceLand() async {
+    if (!sfxEnabled) return;
+    await _rattlePlayer.stop();
+    await _clackPlayer.stop();
+    await _clackPlayer.play(AssetSource('sounds/dice_clack.mp3'));
+  }
+
   Future<void> setMusicEnabled(bool enabled) async {
     musicEnabled = enabled;
     if (!enabled) {
@@ -100,6 +134,10 @@ class SoundService {
     await _musicPlayer.dispose();
     await _sfxPlayer.dispose();
     await _movePlayer.dispose();
+    await _clickPlayer.dispose();
+    await _cashPlayer.dispose();
+    await _rattlePlayer.dispose();
+    await _clackPlayer.dispose();
     _musicStarted = false;
   }
 }

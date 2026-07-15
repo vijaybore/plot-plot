@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/services/sound_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Compact DiceWidget – sits in the main-road header strip
@@ -26,10 +27,12 @@ class DiceWidget extends StatefulWidget {
 class _DiceWidgetState extends State<DiceWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  late Animation<double> _shake;
+  late Animation<double> _shakeX;
+  late Animation<double> _shakeY;
+  late Animation<double> _shakeZ;
   late Animation<double> _bounce;
   int _display = 1;
-  final _rng = Random();
+  final _rng = Random.secure();
 
   @override
   void initState() {
@@ -37,25 +40,42 @@ class _DiceWidgetState extends State<DiceWidget>
     _display = widget.value;
     _ctrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 600));
-    _shake = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
-    _bounce = Tween<double>(begin: 1, end: 1.15)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.bounceOut));
+
+    final easeOutCurve = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+
+    _shakeX = Tween<double>(begin: 0, end: pi * 8).animate(easeOutCurve);
+    _shakeY = Tween<double>(begin: 0, end: pi * 10).animate(easeOutCurve);
+    _shakeZ = Tween<double>(begin: 0, end: pi * 6).animate(easeOutCurve);
+
+    _bounce = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 80),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.15).chain(CurveTween(curve: Curves.easeOut)),
+          weight: 10),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.15, end: 1.0).chain(CurveTween(curve: Curves.easeIn)),
+          weight: 10),
+    ]).animate(_ctrl);
   }
 
   @override
   void didUpdateWidget(DiceWidget old) {
     super.didUpdateWidget(old);
     if (widget.isRolling && !old.isRolling) _animate();
-    if (!widget.isRolling) setState(() => _display = widget.value);
+    if (!widget.isRolling && old.isRolling) {
+      setState(() => _display = widget.value);
+    }
   }
 
   void _animate() {
+    SoundService.instance.playDiceRattle();
     _ctrl.reset();
-    _ctrl.forward();
+    _ctrl.forward().then((_) {
+      SoundService.instance.playDiceLand();
+    });
     int t = 0;
     Future.doWhile(() async {
-      await Future.delayed(const Duration(milliseconds: 70));
+      await Future.delayed(const Duration(milliseconds: 60));
       if (!mounted) return false;
       setState(() => _display = _rng.nextInt(6) + 1);
       return ++t < 10 && widget.isRolling;
@@ -63,7 +83,10 @@ class _DiceWidgetState extends State<DiceWidget>
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,36 +96,48 @@ class _DiceWidgetState extends State<DiceWidget>
       children: [
         AnimatedBuilder(
           animation: _ctrl,
-          builder: (_, child) => Transform.translate(
-            offset: Offset(sin(_shake.value * pi * 8) * 4, 0),
-            child: Transform.scale(scale: _bounce.value, child: child),
-          ),
+          builder: (_, child) {
+            final matrix = Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateX(_shakeX.value)
+              ..rotateY(_shakeY.value)
+              ..rotateZ(_shakeZ.value)
+              ..scale(_bounce.value, _bounce.value, 1.0);
+            return Transform(
+              transform: matrix,
+              alignment: Alignment.center,
+              child: child,
+            );
+          },
           child: GestureDetector(
             onTap: widget.canRoll && !widget.isRolling ? widget.onRoll : null,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 52, height: 52,
+              duration: const Duration(milliseconds: 600),
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                   colors: [Colors.white, Color(0xFFF0EEE8)],
                 ),
                 borderRadius: BorderRadius.circular(11),
                 border: Border.all(
-                  color: widget.canRoll ? AppColors.primary : const Color(0xFFCCCCCC),
-                  width: widget.canRoll ? 2 : 1,
+                  color: widget.canRoll ? AppColors.accent : const Color(0xFFCCCCCC),
+                  width: widget.canRoll ? 3 : 1,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: widget.canRoll
-                        ? AppColors.primary.withValues(alpha: 0.6)
+                        ? AppColors.accent.withValues(alpha: 0.8)
                         : Colors.black26,
-                    blurRadius: widget.canRoll ? 16 : 4,
-                    spreadRadius: widget.canRoll ? 2 : 0,
+                    blurRadius: widget.canRoll ? 20 : 4,
+                    spreadRadius: widget.canRoll ? 4 : 0,
                   ),
                   const BoxShadow(
                     color: Colors.black26,
-                    blurRadius: 4, offset: Offset(0, 2),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
                   ),
                 ],
               ),
@@ -117,10 +152,12 @@ class _DiceWidgetState extends State<DiceWidget>
         ),
         const SizedBox(height: 3),
         Text(
-          widget.isRolling ? '...' : (widget.canRoll ? 'Dice' : '${widget.value}'),
+          widget.isRolling ? '...' : (widget.canRoll ? 'ROLL' : '${widget.value}'),
           style: TextStyle(
             color: widget.canRoll ? AppColors.accent : AppColors.textSecondary,
-            fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 0.5,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
           ),
         ),
       ],

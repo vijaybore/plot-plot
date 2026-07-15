@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
 import '../../../../features/game/domain/models/player_model.dart';
@@ -54,9 +53,13 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
 
   Future<void> _startGame() async {
     final List<PlayerModel> players = [];
-    final startMoney =
-        AppConstants.startingMoneyByPlayers[_playerCount] ??
-        AppConstants.startingMoneyByPlayers[4]!;
+    final tiles = TileBuilder.buildTiles(_boardSize);
+    
+    // Add up total price of all purchasable plots and divide evenly
+    final totalPlotValue = tiles.fold<double>(
+        0.0,
+        (sum, t) => sum + ((t.isPurchasable && t.price != null) ? t.price! : 0.0));
+    final startMoney = (totalPlotValue / _playerCount).floorToDouble();
 
     for (int i = 0; i < _playerCount; i++) {
       final name = _nameControllers[i].text.trim().isEmpty
@@ -69,8 +72,6 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
         colorIndex: _colorIndices[i],
       ));
     }
-
-    final tiles = TileBuilder.buildTiles(_boardSize);
 
     var gameState = GameStateModel(
       gameId: 'offline_${DateTime.now().millisecondsSinceEpoch}',

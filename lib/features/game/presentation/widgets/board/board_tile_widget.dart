@@ -62,6 +62,8 @@ class _PlotTileCardState extends State<PlotTileCard>
           ),
     );
 
+    final bool showNeon = widget.isHighlighted || widget.players.isNotEmpty;
+
     return MediaQuery(
       data: clampedMediaQuery,
       child: GestureDetector(
@@ -88,27 +90,28 @@ class _PlotTileCardState extends State<PlotTileCard>
                       ],
                     )
                   : null,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: widget.isHighlighted
-                    ? AppColors.accent.withValues(alpha: _glowAnim.value)
+                color: showNeon
+                    ? AppColors.accent.withValues(alpha: _glowAnim.value * 0.8 + 0.2)
                     : (widget.tile.isOwned ? _ownerColor() : const Color(0xFFCCBB99)),
-                width: widget.isHighlighted ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
+                width: showNeon ? 2.5 : (widget.tile.isOwned ? 2 : 0.8),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: widget.isHighlighted
-                      ? AppColors.accent.withValues(alpha: 0.5 * _glowAnim.value)
+                  color: showNeon
+                      ? AppColors.accent.withValues(alpha: 0.6 * _glowAnim.value)
                       : (widget.tile.isOwned
-                          ? _ownerColor().withValues(alpha: 0.25)
-                          : Colors.black.withValues(alpha: 0.08)),
-                  blurRadius: widget.isHighlighted ? 12 : 4,
-                  spreadRadius: widget.isHighlighted ? 2 : 0,
+                          ? _ownerColor().withValues(alpha: 0.15)
+                          : Colors.black.withValues(alpha: 0.15)),
+                  blurRadius: showNeon ? 16 : 10,
+                  spreadRadius: showNeon ? 3 : 0,
+                  offset: showNeon ? Offset.zero : const Offset(0, 4),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(15),
               // Player tokens are drawn as an overlay pinned to the
               // bottom of the card instead of a sibling flex child.
               // That way they never add extra height on top of the

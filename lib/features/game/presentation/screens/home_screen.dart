@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'setup_game_screen.dart';
 import '../../../multiplayer/presentation/screens/lobby_screen.dart';
+import '../modals/settings_modal.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -72,6 +74,20 @@ class HomeScreen extends ConsumerWidget {
             ]),
           ),
           const Spacer(),
+          // Settings button
+          GestureDetector(
+            onTap: () => SettingsModal.show(context),
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.appCard,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+              ),
+              child: const Icon(Icons.settings, color: AppColors.textPrimary, size: 20),
+            ),
+          ),
           // Player info chip
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -152,7 +168,8 @@ class HomeScreen extends ConsumerWidget {
                         fontSize: 16,
                         letterSpacing: 2,
                       ),
-                    ),
+                    ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                     .scale(begin: const Offset(1, 1), end: const Offset(1.05, 1.05), duration: 800.ms),
                   ),
                 ],
               ),

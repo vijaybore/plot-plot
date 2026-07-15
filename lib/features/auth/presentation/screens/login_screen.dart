@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -176,9 +176,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildGoogleButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
+    return _AnimatedScaleButton(
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _signInWithGoogle,
         style: ElevatedButton.styleFrom(
@@ -217,6 +218,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
+      ),
       ),
     );
   }
@@ -268,9 +270,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           textCapitalization: TextCapitalization.words,
         ),
         const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
+        _AnimatedScaleButton(
+          child: SizedBox(
+            width: double.infinity,
+            height: 56,
           child: OutlinedButton.icon(
             onPressed: _isLoading ? null : _playAsGuest,
             icon: const Icon(Icons.sports_esports_outlined),
@@ -286,6 +289,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
           ),
+        ),
         ),
       ],
     );
@@ -343,6 +347,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedScaleButton extends StatefulWidget {
+  final Widget child;
+  const _AnimatedScaleButton({required this.child});
+
+  @override
+  State<_AnimatedScaleButton> createState() => _AnimatedScaleButtonState();
+}
+
+class _AnimatedScaleButtonState extends State<_AnimatedScaleButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
       ),
     );
   }

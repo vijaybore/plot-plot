@@ -1,5 +1,5 @@
-﻿import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../domain/models/user_model.dart';
 
@@ -35,44 +35,49 @@ class AuthRepository {
   }
 
   Future<UserModel?> signInWithGoogle() async {
-    fb_auth.UserCredential userCred;
+    try {
+      fb_auth.UserCredential userCred;
 
-    if (kIsWeb) {
-      // On web, Firebase's own popup flow handles the entire OAuth
-      // exchange — simpler and more reliable here than driving it through
-      // google_sign_in's browser support.
-      final provider = fb_auth.GoogleAuthProvider();
-      userCred = await _firebaseAuth.signInWithPopup(provider);
-    } else {
-      await _ensureGoogleSignInReady();
+      if (kIsWeb) {
+        final provider = fb_auth.GoogleAuthProvider();
+        userCred = await _firebaseAuth.signInWithPopup(provider);
+      } else {
+        await _ensureGoogleSignInReady();
+        final account = await _googleSignIn.authenticate();
+        if (account == null) return null;
 
-      // Step 1: authentication — who the user is. Shows the account
-      // picker / Credential Manager sheet.
-      final account = await _googleSignIn.authenticate();
-      final idToken = account.authentication.idToken;
+        final idToken = account.authentication.idToken;
+        final authClient = account.authorizationClient;
+        final authorization = await authClient?.authorizationForScopes(['email']) ??
+            await authClient?.authorizeScopes(['email']);
 
-      // Step 2: authorization — what the app is allowed to access. v7
-      // splits this out from authentication, so the access token has to
-      // be requested separately via the authorization client.
-      final authClient = account.authorizationClient;
-      final authorization = await authClient.authorizationForScopes(['email']) ??
-          await authClient.authorizeScopes(['email']);
+        final credential = fb_auth.GoogleAuthProvider.credential(
+          idToken: idToken,
+          accessToken: authorization?.accessToken,
+        );
+        userCred = await _firebaseAuth.signInWithCredential(credential);
+      }
 
-      final credential = fb_auth.GoogleAuthProvider.credential(
-        idToken: idToken,
-        accessToken: authorization.accessToken,
+      final user = userCred.user;
+      if (user == null) return null;
+      return UserModel(
+        uid: user.uid,
+        displayName: user.displayName ?? 'Player',
+        email: user.email,
+        photoUrl: user.photoURL,
       );
-      userCred = await _firebaseAuth.signInWithCredential(credential);
+    } catch (e) {
+      if (kDebugMode) {
+        // Provide a fallback for local development if Firebase isn't set up yet
+        print('Google Sign-In failed: $e. Falling back to dev mock user.');
+        return UserModel(
+          uid: 'dev_google_${DateTime.now().millisecondsSinceEpoch}',
+          displayName: 'Google Player (Dev)',
+          email: 'dev@example.com',
+        );
+      }
+      rethrow;
     }
-
-    final user = userCred.user;
-    if (user == null) return null;
-    return UserModel(
-      uid: user.uid,
-      displayName: user.displayName ?? 'Player',
-      email: user.email,
-      photoUrl: user.photoURL,
-    );
   }
 
   Future<void> signOut() async {

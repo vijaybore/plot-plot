@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../../../core/utils/money_formatter.dart';
 import '../../domain/models/game_state_model.dart';
+import 'dart:ui';
 import '../../domain/models/player_model.dart';
 import '../../domain/models/tile_model.dart';
 
@@ -14,7 +15,10 @@ class BankModal extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => BankModal(gs: gs),
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: BankModal(gs: gs),
+      ),
     );
   }
 
@@ -27,7 +31,7 @@ class BankModal extends StatelessWidget {
       maxChildSize: 0.95,
       builder: (_, scroll) => Container(
         decoration: BoxDecoration(
-          color: AppColors.appBg,
+          color: AppColors.appBg.withValues(alpha: 0.9), // slight transparency for blur
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: AppColors.appBorder),
           boxShadow: [

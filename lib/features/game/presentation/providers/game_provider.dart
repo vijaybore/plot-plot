@@ -12,7 +12,7 @@ final gameProvider =
 final diceRollingProvider = StateProvider<bool>((ref) => false);
 
 class GameNotifier extends StateNotifier<GameStateModel?> {
-  final _rng = Random();
+  final _rng = Random.secure();
   GameNotifier() : super(null);
 
   // ── Init ─────────────────────────────────────────────────────────
@@ -38,11 +38,11 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
       return;
     }
 
-    ref.read(diceRollingProvider.notifier).state = true;
-    await Future.delayed(const Duration(milliseconds: 700));
-
     final dice  = _rng.nextInt(6) + 1;
     final total = gs.tiles.isNotEmpty ? gs.tiles.length : gs.boardSize;
+
+    ref.read(diceRollingProvider.notifier).state = true;
+    await Future.delayed(const Duration(milliseconds: 700));
 
     ref.read(diceRollingProvider.notifier).state = false;
 
@@ -290,6 +290,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '💸 ${payer.displayName} paid ${_f(rent)} rent to ${owner.displayName}';
     _log(msg);
+    SoundService.instance.playCashRegister();
 
     final rentedTile = tile.recordRentPaid(payer.id, rent);
 
@@ -329,6 +330,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     final msg  = '🏠 ${player.displayName} purchased "$name" '
         '(${tile.plotNumber}) for ${_f(price)}';
     _log(msg);
+    SoundService.instance.playCashRegister();
 
     state = gs.copyWith(
       tiles: gs.tiles.map((t) => t.index == tile.index
@@ -367,6 +369,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     final msg = '🏦 ${seller.displayName} sold "${tile.displayName}" '
         'back to the Bank for ${_f(payout)}';
     _log(msg);
+    SoundService.instance.playCashRegister();
 
     state = gs.copyWith(
       tiles: gs.tiles.map((t) => t.index == tileIndex
@@ -399,6 +402,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     final msg = '🤝 ${seller.displayName} sold "${tile.displayName}" to '
         '${buyer.displayName} for ${_f(price)}';
     _log(msg);
+    SoundService.instance.playCashRegister();
 
     state = gs.copyWith(
       tiles: gs.tiles.map((t) => t.index == tileIndex
@@ -516,6 +520,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '🏦 ${p.displayName} deposited ${_f(amount)} to bank';
     _log(msg);
+    SoundService.instance.playCashRegister();
     state = gs.copyWith(
       players: gs.players.map((pl) => pl.id == playerId
           ? pl.copyWith(money: pl.money - amount, bankBalance: pl.bankBalance + amount)
@@ -533,6 +538,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '🏦 ${p.displayName} withdrew ${_f(amount)} from bank';
     _log(msg);
+    SoundService.instance.playCashRegister();
     state = gs.copyWith(
       players: gs.players.map((pl) => pl.id == playerId
           ? pl.copyWith(money: pl.money + amount, bankBalance: pl.bankBalance - amount)
@@ -552,6 +558,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '💳 ${p.displayName} took a loan of ${_f(amount)}';
     _log(msg);
+    SoundService.instance.playCashRegister();
     state = gs.copyWith(
       players: gs.players.map((pl) => pl.id == playerId
           ? pl.copyWith(money: pl.money + amount, loanAmount: pl.loanAmount + amount)
@@ -571,6 +578,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '💳 ${p.displayName} repaid ${_f(repay)} of loan';
     _log(msg);
+    SoundService.instance.playCashRegister();
     state = gs.copyWith(
       players: gs.players.map((pl) => pl.id == playerId
           ? pl.copyWith(money: pl.money - repay, loanAmount: pl.loanAmount - repay)
@@ -589,6 +597,7 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
 
     final msg = '💸 ${from.displayName} transferred ${_f(amount)} to ${to.displayName}';
     _log(msg);
+    SoundService.instance.playCashRegister();
     state = gs.copyWith(
       players: gs.players.map((p) {
         if (p.id == fromId) return p.copyWith(money: p.money - amount);
