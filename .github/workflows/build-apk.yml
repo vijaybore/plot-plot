@@ -1,26 +1,20 @@
 name: Build APK
-
 on:
   workflow_dispatch:
   push:
     branches:
       - dark-glass-theme
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.44.0'
           channel: 'stable'
-
       - run: flutter pub get
-
       - run: flutter build apk --release
-
       - uses: actions/upload-artifact@v4
         with:
           name: plot-plot-release-apk
