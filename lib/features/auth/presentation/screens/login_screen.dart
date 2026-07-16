@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/providers/auth_provider.dart';
@@ -20,27 +20,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
-  }
-
-  Future<void> _signInWithGoogle() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      final repo = ref.read(authRepositoryProvider);
-      final user = await repo.signInWithGoogle();
-      if (user != null && mounted) {
-        ref.read(currentUserProvider.notifier).state = user;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
-    } catch (e) {
-      setState(() => _error = 'Google Sign-In failed. Please try again or use Guest mode.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   Future<void> _playAsGuest() async {
@@ -92,10 +71,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 60),
                 _buildLogo(),
                 const SizedBox(height: 48),
-                _buildGoogleButton(),
-                const SizedBox(height: 24),
-                _buildDivider(),
-                const SizedBox(height: 24),
                 _buildGuestSection(),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
@@ -175,78 +150,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildGoogleButton() {
-    return _AnimatedScaleButton(
-      child: SizedBox(
-        width: double.infinity,
-        height: 56,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _signInWithGoogle,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1A1A2E),
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'G',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF4285F4),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Continue with Google',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                  ),
-                ],
-              ),
-      ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(
-          child: Divider(
-            color: AppColors.textHint.withValues(alpha: 0.4),
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'or play offline',
-            style: TextStyle(color: AppColors.textHint, fontSize: 12),
-          ),
-        ),
-        Expanded(
-          child: Divider(
-            color: AppColors.textHint.withValues(alpha: 0.4),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildGuestSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,10 +173,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           textCapitalization: TextCapitalization.words,
         ),
         const SizedBox(height: 14),
-        _AnimatedScaleButton(
-          child: SizedBox(
-            width: double.infinity,
-            height: 56,
+        SizedBox(
+          width: double.infinity,
+          height: 56,
           child: OutlinedButton.icon(
             onPressed: _isLoading ? null : _playAsGuest,
             icon: const Icon(Icons.sports_esports_outlined),
@@ -289,7 +191,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
           ),
-        ),
         ),
       ],
     );
@@ -347,32 +248,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AnimatedScaleButton extends StatefulWidget {
-  final Widget child;
-  const _AnimatedScaleButton({required this.child});
-
-  @override
-  State<_AnimatedScaleButton> createState() => _AnimatedScaleButtonState();
-}
-
-class _AnimatedScaleButtonState extends State<_AnimatedScaleButton> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: widget.child,
       ),
     );
   }
