@@ -79,9 +79,31 @@ class GameStateModel extends Equatable {
     return next;
   }
 
+  /// Current market value of everything a player owns on the board —
+  /// uses TileModel.currentValue, which factors in upgrade level on top
+  /// of the appreciating base price, so an upgraded plot counts for more
+  /// than a bare one. A plot bought early is worth more here than what
+  /// the player actually paid (see TileModel.purchasePrice for that).
+  double propertyValueOf(PlayerModel player) {
+    double total = 0;
+    for (final id in player.ownedPropertyIds) {
+      final index = int.tryParse(id);
+      if (index == null || index < 0 || index >= tiles.length) continue;
+      total += tiles[index].currentValue;
+    }
+    return total;
+  }
+
+  /// Full net worth used for ranking and the end-of-game winner: cash +
+  /// bank balance − loans + farms + businesses (all from PlayerModel.
+  /// netWorth) plus the current market value of every plot they own.
+  /// PlayerModel.netWorth alone can't include plots since PlayerModel has
+  /// no access to the tiles list — this is why the calculation lives here.
+  double netWorthOf(PlayerModel player) => player.netWorth + propertyValueOf(player);
+
   List<PlayerModel> get rankedPlayers {
     final sorted = [...players];
-    sorted.sort((a, b) => b.netWorth.compareTo(a.netWorth));
+    sorted.sort((a, b) => netWorthOf(b).compareTo(netWorthOf(a)));
     return sorted;
   }
 

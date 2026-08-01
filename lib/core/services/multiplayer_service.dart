@@ -2,14 +2,22 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import '../../features/game/domain/models/game_state_model.dart';
 import '../../features/multiplayer/domain/models/chat_message_model.dart';
+import '../../features/multiplayer/domain/models/lobby_player_model.dart';
 import '../utils/room_code_generator.dart';
 
 /// Firebase Realtime Database tree:
 ///
 ///   /rooms/{code}/meta      -> { hostId, createdAt, status }
+///   /rooms/{code}/lobby/{playerId} -> { name, colorIndex, joinedAt }
 ///   /rooms/{code}/state     -> full GameStateModel.toMap()
 ///   /rooms/{code}/chat/{id} -> ChatMessageModel.toMap()
 ///   /rooms/{code}/intents/{id} -> { action, playerId, args, timestamp }
+///
+/// meta/status is 'waiting' from the moment the host creates the room —
+/// before /state exists at all — through however long it takes players to
+/// join via /lobby. The host flips it to 'active' (and writes /state) only
+/// once they tap Start; every waiting guest is watching that field and
+/// transitions into the game the instant it changes.
 ///
 /// Architecture: host-authoritative. One device (the host) runs the real
 /// game logic (GameNotifier, unchanged) and pushes the resulting state here
@@ -48,6 +56,70 @@ class MultiplayerService {
       'state': initialState.toMap(),
     });
     return code;
+  }
+
+  // ── Waiting lobby (before the game actually starts) ────────────────
+  /// Creates a room in the 'waiting' state with no /state yet — just the
+  /// host present in /lobby. Returns the room code to share.
+  Future<String> createLobby({
+    required String hostId,
+    required String hostName,
+    required int hostColorIndex,
+  }) async {
+    String code = RoomCodeGenerator.generate();
+    while ((await _root.child(code).get()).exists) {
+      code = RoomCodeGenerator.generate();
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _root.child(code).set({
+      'meta': {
+        'hostId': hostId,
+        'createdAt': now,
+        'status': 'waiting',
+      },
+      'lobby': {
+        hostId: {'name': hostName, 'colorIndex': hostColorIndex, 'joinedAt': now},
+      },
+    });
+    return code;
+  }
+
+  /// A guest joins an existing waiting-room lobby.
+  Future<void> joinLobby(String code, LobbyPlayerModel player) =>
+      _root.child(code.toUpperCase()).child('lobby').child(player.id).set(player.toMap());
+
+  /// A player leaves the lobby before the game has started (e.g. backs out).
+  Future<void> leaveLobby(String code, String playerId) =>
+      _root.child(code.toUpperCase()).child('lobby/$playerId').remove();
+
+  /// Live list of everyone currently in the waiting room, oldest join first.
+  Stream<List<LobbyPlayerModel>> watchLobby(String code) {
+    return _root.child(code.toUpperCase()).child('lobby').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw == null) return <LobbyPlayerModel>[];
+      final map = _deepMap(raw);
+      final players = map.entries
+          .map((e) => LobbyPlayerModel.fromMap(e.key, _deepMap(e.value)))
+          .toList();
+      players.sort((a, b) => a.joinedAt.compareTo(b.joinedAt));
+      return players;
+    });
+  }
+
+  /// 'waiting' while the lobby is filling, 'active' once the host starts.
+  /// Guests watch this to know the instant they should jump into the game.
+  Stream<String?> watchStatus(String code) {
+    return _root.child(code.toUpperCase()).child('meta/status').onValue.map(
+          (event) => event.snapshot.value as String?,
+        );
+  }
+
+  /// Host-only: writes the real game state built from the joined lobby
+  /// players and flips status to 'active', releasing every waiting guest.
+  Future<void> startGameFromLobby(String code, GameStateModel state) async {
+    final ref = _root.child(code.toUpperCase());
+    await ref.child('state').set(state.toMap());
+    await ref.child('meta/status').set('active');
   }
 
   Future<bool> roomExists(String code) async {

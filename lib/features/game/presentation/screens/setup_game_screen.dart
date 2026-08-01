@@ -97,14 +97,34 @@ class _SetupGameScreenState extends ConsumerState<SetupGameScreen> {
         ref.read(multiplayerRoomProvider.notifier).setRoom(roomCode: roomCode, isHost: true);
       } catch (e) {
         if (!mounted) return;
+        // Show the real failure instead of guessing — this same catch
+        // fires for an uninitialized Firebase app, a network error, and
+        // database-rules permission-denied, and they need different fixes.
+        final message = e.toString();
+        final looksUnconfigured = message.contains('no-app') ||
+            message.contains('DefaultFirebaseOptions') ||
+            message.contains('has not been initialized');
+        final looksPermissionDenied = message.toLowerCase().contains('permission') ||
+            message.toLowerCase().contains('denied');
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Online setup needed'),
-            content: const Text(
-              "Firebase isn't configured yet, so online rooms can't be "
-              'created. Run `flutterfire configure` from the project root '
-              'first — see the setup notes.',
+            title: Text(
+              looksUnconfigured
+                  ? 'Firebase not configured'
+                  : looksPermissionDenied
+                      ? 'Database permission denied'
+                      : 'Could not create online room',
+            ),
+            content: Text(
+              looksUnconfigured
+                  ? "firebase_options.dart is missing or invalid. Run "
+                    '`flutterfire configure` from the project root first.'
+                  : looksPermissionDenied
+                      ? 'The Realtime Database rules are rejecting this write '
+                        '— check the rules in the Firebase console (test-mode '
+                        'rules expire after 30 days).'
+                      : 'Error: $message',
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),

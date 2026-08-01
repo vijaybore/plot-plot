@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/multiplayer_service.dart';
-import '../../../game/domain/models/game_state_model.dart';
-import '../../../game/presentation/providers/game_provider.dart';
-import '../../../game/presentation/screens/game_screen.dart';
+import '../../../../shared/providers/auth_provider.dart';
+import '../../domain/models/lobby_player_model.dart';
 import '../providers/multiplayer_provider.dart';
+import 'waiting_room_screen.dart';
 
 class JoinRoomScreen extends ConsumerStatefulWidget {
   const JoinRoomScreen({super.key});
@@ -18,8 +18,6 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
   final _codeCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
-  GameStateModel? _foundState;
-  String? _foundCode;
 
   @override
   void dispose() {
@@ -27,9 +25,12 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
     super.dispose();
   }
 
-  Future<void> _lookupRoom() async {
+  Future<void> _joinRoom() async {
     final code = _codeCtrl.text.trim().toUpperCase();
     if (code.isEmpty) return;
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
     setState(() { _loading = true; _error = null; });
 
     final exists = await MultiplayerService.instance.roomExists(code);
@@ -37,25 +38,33 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
       setState(() { _loading = false; _error = 'No room found with that code.'; });
       return;
     }
-    // One-time read of the current state to show the player-slot picker.
-    final state = await MultiplayerService.instance.watchState(code).first;
-    setState(() {
-      _loading = false;
-      _foundCode = code;
-      _foundState = state;
-      if (state == null) _error = "Room exists but hasn't started yet — try again shortly.";
-    });
-  }
 
-  void _joinAsPlayer(String playerId) {
-    ref.read(multiplayerRoomProvider.notifier)
-        .setLocalPlayerId(playerId);
-    ref.read(multiplayerRoomProvider.notifier)
-        .setRoom(roomCode: _foundCode!, isHost: false);
-    ref.read(gameProvider.notifier).initGame(_foundState!);
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const GameScreen()),
-    );
+    // Pick the next free colour based on how many are already in the lobby.
+    final currentLobby = await MultiplayerService.instance.watchLobby(code).first;
+    final colorIndex = currentLobby.length % AppColors.playerColors.length;
+
+    try {
+      await MultiplayerService.instance.joinLobby(
+        code,
+        LobbyPlayerModel(
+          id: user.uid,
+          name: user.displayName,
+          colorIndex: colorIndex,
+          joinedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      ref.read(multiplayerRoomProvider.notifier).setLocalPlayerId(user.uid);
+      ref.read(multiplayerRoomProvider.notifier).setRoom(roomCode: code, isHost: false);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WaitingRoomScreen(roomCode: code, isHost: false),
+        ),
+      );
+    } catch (e) {
+      setState(() { _loading = false; _error = 'Could not join room: $e'; });
+    }
   }
 
   @override
@@ -85,35 +94,17 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
             SizedBox(
               height: 50,
               child: ElevatedButton(
-                onPressed: _loading ? null : _lookupRoom,
+                onPressed: _loading ? null : _joinRoom,
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
                 child: _loading
                     ? const SizedBox(width: 20, height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Find Room'),
+                    : const Text('Join Room'),
               ),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-            ],
-            if (_foundState != null) ...[
-              const SizedBox(height: 24),
-              const Text('Who are you at the table?',
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 10),
-              ..._foundState!.players.map((p) => Card(
-                color: AppColors.appCard,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(backgroundColor: p.color,
-                      child: Text(p.displayName.isNotEmpty ? p.displayName[0].toUpperCase() : '?',
-                          style: const TextStyle(color: Colors.white))),
-                  title: Text(p.displayName, style: const TextStyle(color: Colors.white)),
-                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
-                  onTap: () => _joinAsPlayer(p.id),
-                ),
-              )),
             ],
           ],
         ),

@@ -134,7 +134,7 @@ class PlayerStatsModal extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _StatsGrid(
               cash: player.money,
-              netWorth: player.netWorth,
+              netWorth: player.netWorth + _totalPlotValue,
               plotValue: _totalPlotValue,
               loanAmount: player.loanAmount,
               propCount: _properties.length,

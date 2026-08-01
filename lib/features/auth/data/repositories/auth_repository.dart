@@ -22,7 +22,7 @@ class AuthRepository {
   Future<void> _ensureGoogleSignInReady() async {
     if (_googleSignInReady) return;
     await _googleSignIn.initialize(
-      serverClientId: 'REPLACE_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+      serverClientId: '201302142598-95jbp1ic43bnl3ubpge7jiprmtpln9an.apps.googleusercontent.com',
     );
     _googleSignInReady = true;
   }

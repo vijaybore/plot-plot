@@ -464,6 +464,26 @@ class GameNotifier extends StateNotifier<GameStateModel?> {
     state = state!.copyWith(lastEvent: GameEvent.none, clearEventMessage: true);
   }
 
+  // ── Manual end (host chooses to stop the match early) ──────────────
+  /// Ends the game right now regardless of how many rounds have been
+  /// played. Winner is decided the same way as the automatic round-based
+  /// ending — highest net worth via GameStateModel.rankedPlayers, which
+  /// already includes cash, bank, loans, farms, businesses, and the
+  /// current market value of every owned plot.
+  void endGameNow() {
+    if (state == null) return;
+    final gs = state!;
+    if (gs.phase == GamePhase.ended) return;
+    final log = List<String>.from(gs.activityLog)
+      ..add('🏁 Game ended early. Winner: ${gs.rankedPlayers.first.displayName}');
+    state = gs.copyWith(
+      activityLog: log,
+      phase: GamePhase.ended,
+      lastEvent: GameEvent.gameEnded,
+      eventMessage: '🏆 Game Over! ${gs.rankedPlayers.first.displayName} wins!',
+    );
+  }
+
   // ── End turn ─────────────────────────────────────────────────────
   void endTurn() {
     if (state == null) return;

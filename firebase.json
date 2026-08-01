@@ -1,16 +1,1 @@
-{
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
-}
+{"database":{"rules":"database.rules.json"},"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"android":{"default":{"projectId":"plot-plot-suvi","appId":"1:201302142598:android:0ab4bc9771c8ebf38beb07","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"plot-plot-suvi","configurations":{"android":"1:201302142598:android:0ab4bc9771c8ebf38beb07","ios":"1:201302142598:ios:56788986c2be2ae38beb07","macos":"1:201302142598:ios:56788986c2be2ae38beb07","web":"1:201302142598:web:3467fee244447afe8beb07","windows":"1:201302142598:web:412b8d358a1237bd8beb07"}}}}}}

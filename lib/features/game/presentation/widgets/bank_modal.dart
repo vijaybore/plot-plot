@@ -133,9 +133,11 @@ class BankModal extends StatelessWidget {
                     .where((t) => t.type == TileType.farmZone).length;
                 final props = ownedTiles
                     .where((t) => t.type == TileType.property).length;
+                final netWorth = gs.netWorthOf(p);
                 return _PlayerRow(
                   rank: i + 1,
                   player: p,
+                  netWorth: netWorth,
                   farmCount: farms,
                   propCount: props,
                   isLeader: i == 0,
@@ -146,7 +148,7 @@ class BankModal extends StatelessWidget {
           // Wealth chart bar
           Padding(
             padding: const EdgeInsets.all(16),
-            child: _WealthBar(players: ranked),
+            child: _WealthBar(entries: ranked.map((p) => (p, gs.netWorthOf(p))).toList()),
           ),
         ]),
       ),
@@ -157,6 +159,7 @@ class BankModal extends StatelessWidget {
 class _PlayerRow extends StatelessWidget {
   final int rank;
   final PlayerModel player;
+  final double netWorth;
   final int farmCount;
   final int propCount;
   final bool isLeader;
@@ -164,6 +167,7 @@ class _PlayerRow extends StatelessWidget {
   const _PlayerRow({
     required this.rank,
     required this.player,
+    required this.netWorth,
     required this.farmCount,
     required this.propCount,
     required this.isLeader,
@@ -239,7 +243,7 @@ class _PlayerRow extends StatelessWidget {
         )),
         // Net worth
         Expanded(flex: 2, child: Text(
-          MoneyFormatter.format(player.netWorth),
+          MoneyFormatter.format(netWorth),
           textAlign: TextAlign.right,
           style: TextStyle(
             color: isLeader ? AppColors.accent : AppColors.textPrimary,
@@ -253,13 +257,13 @@ class _PlayerRow extends StatelessWidget {
 }
 
 class _WealthBar extends StatelessWidget {
-  final List<PlayerModel> players;
-  const _WealthBar({required this.players});
+  final List<(PlayerModel, double)> entries;
+  const _WealthBar({required this.entries});
 
   @override
   Widget build(BuildContext context) {
-    final total = players.fold<double>(
-        0, (s, p) => s + (p.netWorth > 0 ? p.netWorth : 0));
+    final total = entries.fold<double>(
+        0, (s, e) => s + (e.$2 > 0 ? e.$2 : 0));
     if (total == 0) return const SizedBox.shrink();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -270,8 +274,10 @@ class _WealthBar extends StatelessWidget {
       ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Row(
-          children: players.map((p) {
-            final share = p.netWorth > 0 ? p.netWorth / total : 0.0;
+          children: entries.map((e) {
+            final p = e.$1;
+            final netWorth = e.$2;
+            final share = netWorth > 0 ? netWorth / total : 0.0;
             return Flexible(
               flex: (share * 1000).toInt().clamp(1, 1000),
               child: Container(
@@ -296,11 +302,11 @@ class _WealthBar extends StatelessWidget {
       Wrap(
         spacing: 12,
         runSpacing: 4,
-        children: players.map((p) => Row(mainAxisSize: MainAxisSize.min, children: [
+        children: entries.map((e) => Row(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 10, height: 10,
-              decoration: BoxDecoration(color: p.color, shape: BoxShape.circle)),
+              decoration: BoxDecoration(color: e.$1.color, shape: BoxShape.circle)),
           const SizedBox(width: 4),
-          Text(p.displayName,
+          Text(e.$1.displayName,
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
         ])).toList(),
       ),

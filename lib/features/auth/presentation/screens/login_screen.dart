@@ -48,6 +48,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final repo = ref.read(authRepositoryProvider);
+      final user = await repo.signInWithGoogle();
+      if (user != null && mounted) {
+        ref.read(currentUserProvider.notifier).state = user;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    } catch (e) {
+      setState(() => _error = 'Google sign-in failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -72,6 +93,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 _buildLogo(),
                 const SizedBox(height: 48),
                 _buildGuestSection(),
+                const SizedBox(height: 14),
+                _buildDivider(),
+                const SizedBox(height: 14),
+                _buildGoogleSection(),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   _buildError(),
@@ -193,6 +218,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDivider() {
+    return Row(
+      children: [
+        Expanded(child: Divider(color: AppColors.textHint.withValues(alpha: 0.3))),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'OR',
+            style: TextStyle(color: AppColors.textHint, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(child: Divider(color: AppColors.textHint.withValues(alpha: 0.3))),
+      ],
+    );
+  }
+
+  Widget _buildGoogleSection() {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton.icon(
+        onPressed: _isLoading ? null : _signInWithGoogle,
+        icon: const Text('G', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF4285F4))),
+        label: const Text(
+          'Continue with Google',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
     );
   }
 

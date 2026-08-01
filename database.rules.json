@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "rooms": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$roomCode": {
+        "meta": {
+          ".validate": "newData.hasChildren(['hostId', 'createdAt', 'status'])"
+        },
+        "chat": {
+          "$messageId": {
+            ".validate": "newData.hasChild('senderId')"
+          }
+        },
+        "intents": {
+          "$intentId": {
+            ".validate": "newData.hasChildren(['action', 'playerId', 'timestamp'])"
+          }
+        }
+      }
+    },
+    "$other": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}

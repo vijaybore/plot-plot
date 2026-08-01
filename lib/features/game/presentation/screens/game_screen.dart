@@ -210,11 +210,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // on every hop via ref.watch and the token visibly moves step by step,
     // exactly like a Ludo piece, instead of teleporting to the final tile.
     await ref.read(gameProvider.notifier).rollDice(ref);
-
-    if (mounted) {
-      final msg = ref.read(gameProvider)?.eventMessage;
-      if (msg != null) _showToast(msg);
-    }
+    // Not showing a toast here on purpose — gs.eventMessage already
+    // renders via _EventBanner right below the turn banner. Firing a
+    // toast with the same text on top of that was showing the identical
+    // "rolled X → landed on Y" message twice at once.
   }
 
   @override
@@ -241,7 +240,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       body: SafeArea(
         child: Stack(children: [
           Column(children: [
-            _AppBar(gs: gs, onLogTap: _toggleLog),
+            _AppBar(gs: gs, onLogTap: _toggleLog, onEndGame: () => _confirmEndGame(gs)),
             if (ref.watch(multiplayerRoomProvider).isOnline)
               _RoomCodeBanner(roomCode: ref.watch(multiplayerRoomProvider).roomCode!),
             _TurnBanner(player: cur),
@@ -362,6 +361,38 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
+  void _confirmEndGame(GameStateModel gs) {
+    if (_isGuest) {
+      _showToast("⏳ Only the host can end the game");
+      return;
+    }
+    final leader = gs.rankedPlayers.first;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.appCard,
+        title: const Text('End Game?', style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'This ends the match right now instead of playing out the '
+          'remaining rounds. ${leader.displayName} is currently leading '
+          'and would win.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Keep Playing')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(gameProvider.notifier).endGameNow();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('End Game'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showBuySheet(GameStateModel gs, TileModel tile) {
     showModalBottomSheet(
       context: context,
@@ -472,7 +503,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
 class _AppBar extends StatelessWidget {
   final GameStateModel gs;
   final VoidCallback onLogTap;
-  const _AppBar({required this.gs, required this.onLogTap});
+  final VoidCallback onEndGame;
+  const _AppBar({required this.gs, required this.onLogTap, required this.onEndGame});
 
   @override
   Widget build(BuildContext context) {
@@ -501,6 +533,10 @@ class _AppBar extends StatelessWidget {
         _iconBtn('🏦', () {
           // handled by player strip
         }),
+        const SizedBox(width: 4),
+        // End Game — lets whoever's playing stop the match early instead
+        // of only ever ending automatically after the chosen round count.
+        _iconBtn('🏁', onEndGame),
         const SizedBox(width: 4),
         // Log
         GestureDetector(
@@ -739,7 +775,7 @@ class _DiceArea extends StatelessWidget {
             value: gs.lastDiceValue ?? 1,
             rollTrigger: rollTrigger,
             size: 52,
-            disabled: !_canRoll && !isRolling,
+            disabled: gs.phase == GamePhase.ended,
           ),
         ),
       ),
@@ -895,7 +931,7 @@ class _PlayerCard extends StatelessWidget {
               const Icon(Icons.play_arrow, color: AppColors.success, size: 13),
           ]),
           const SizedBox(height: 4),
-          _row('Net Worth', _f(player.netWorth), AppColors.textPrimary, bold: true),
+          _row('Net Worth', _f(player.netWorth + ownedTiles.fold<double>(0.0, (s, t) => s + t.currentValue)), AppColors.textPrimary, bold: true),
           _row('Cash',      _f(player.money),    AppColors.success),
           _row('Bank',      _f(player.bankBalance), AppColors.info),
           if (player.loanAmount > 0)
@@ -1090,7 +1126,7 @@ class _TownshipOverview extends StatelessWidget {
                     Expanded(child: Text(p.displayName,
                       style: const TextStyle(color: AppColors.textPrimary,
                           fontSize: 12, fontWeight: FontWeight.w700))),
-                    Text(_f(p.netWorth),
+                    Text(_f(gs.netWorthOf(p)),
                       style: const TextStyle(color: AppColors.success,
                           fontSize: 12, fontWeight: FontWeight.w800)),
                   ]),
@@ -1418,7 +1454,7 @@ class _BankSheetState extends State<_BankSheet>
             _vdiv(),
             _bal('Loan',  _f(_me.loanAmount),   Colors.redAccent),
             _vdiv(),
-            _bal('Net Worth', _f(_me.netWorth), Colors.amberAccent),
+            _bal('Net Worth', _f(widget.gs.netWorthOf(_me)), Colors.amberAccent),
           ]),
         ),
         // Tabs
@@ -2082,7 +2118,7 @@ class _EndScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(winner.displayName, style: const TextStyle(
               color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w900)),
-            Text('🏆 Winner • Net Worth: ${_f(winner.netWorth)}',
+            Text('🏆 Winner • Net Worth: ${_f(gs.netWorthOf(winner))}',
               style: const TextStyle(color: AppColors.success, fontSize: 13)),
           ]),
         ),
@@ -2133,7 +2169,7 @@ class _EndScreen extends StatelessWidget {
                       Text('Cash: ${_f(p.money)}  Bank: ${_f(p.bankBalance)}',
                         style: const TextStyle(color: AppColors.textHint, fontSize: 10)),
                     ])),
-                  Text(_f(p.netWorth), style: const TextStyle(
+                  Text(_f(gs.netWorthOf(p)), style: const TextStyle(
                     color: AppColors.success, fontSize: 15,
                     fontWeight: FontWeight.w900)),
                 ]),

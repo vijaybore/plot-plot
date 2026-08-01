@@ -87,30 +87,68 @@ class _Dice3DState extends State<Dice3D> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final s = widget.size;
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, _) {
-        final cubeRx = _rx.value, cubeRy = _ry.value;
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0025)
-            ..rotateX(cubeRx)
-            ..rotateY(cubeRy),
-          child: SizedBox(
-            width: s,
-            height: s,
-            child: Stack(children: [
-              _face(1, s, rx: 0, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
-              _face(6, s, rx: 0, ry: math.pi, cubeRx: cubeRx, cubeRy: cubeRy),
-              _face(2, s, rx: 0, ry: math.pi / 2, cubeRx: cubeRx, cubeRy: cubeRy),
-              _face(5, s, rx: 0, ry: -math.pi / 2, cubeRx: cubeRx, cubeRy: cubeRy),
-              _face(3, s, rx: -math.pi / 2, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
-              _face(4, s, rx: math.pi / 2, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
-            ]),
-          ),
-        );
-      },
+    // Explicit fixed size on the outermost widget — this is deliberate.
+    // The previous version returned a bare Stack with no size of its own,
+    // trusting it to size itself from its non-positioned child. That's
+    // supposed to work, but in this widget's actual parent chain
+    // (Container with no width/height, inside a Row/header strip) it was
+    // collapsing to zero and rendering nothing. An explicit SizedBox root
+    // can't collapse regardless of what constraints the parent hands down.
+    return SizedBox(
+      width: s,
+      height: s * 1.14, // a bit of extra room below for the contact shadow
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, _) {
+          final cubeRx = _rx.value, cubeRy = _ry.value;
+          return Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.topCenter,
+            children: [
+              // Soft contact shadow so the cube reads as sitting on a
+              // surface rather than floating flat against the background.
+              Positioned(
+                bottom: 0,
+                child: Container(
+                  width: s * 0.78,
+                  height: s * 0.16,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(s),
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.black.withValues(alpha: 0.35),
+                        Colors.black.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                child: Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..setEntry(3, 2, 0.0025)
+                    ..rotateX(cubeRx)
+                    ..rotateY(cubeRy),
+                  child: SizedBox(
+                    width: s,
+                    height: s,
+                    child: Stack(children: [
+                      _face(1, s, rx: 0, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
+                      _face(6, s, rx: 0, ry: math.pi, cubeRx: cubeRx, cubeRy: cubeRy),
+                      _face(2, s, rx: 0, ry: math.pi / 2, cubeRx: cubeRx, cubeRy: cubeRy),
+                      _face(5, s, rx: 0, ry: -math.pi / 2, cubeRx: cubeRx, cubeRy: cubeRy),
+                      _face(3, s, rx: -math.pi / 2, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
+                      _face(4, s, rx: math.pi / 2, ry: 0, cubeRx: cubeRx, cubeRy: cubeRy),
+                    ]),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -150,17 +188,47 @@ class _Dice3DState extends State<Dice3D> with SingleTickerProviderStateMixin {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: widget.disabled
-                ? const [Color(0xFF555555), Color(0xFF3A3A3A)]
-                : const [Color(0xFFFDFDFD), Color(0xFFE4E4E4)],
+                ? const [Color(0xFF5A5A5A), Color(0xFF3A3A3A)]
+                : const [Color(0xFFFFFFFF), Color(0xFFE9E9E9)],
+            stops: const [0.0, 1.0],
           ),
-          borderRadius: BorderRadius.circular(s * 0.16),
-          border: Border.all(color: Colors.black.withValues(alpha: 0.15), width: 1),
+          borderRadius: BorderRadius.circular(s * 0.18),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.12), width: 1),
           boxShadow: const [
-            BoxShadow(color: Colors.black26, blurRadius: 3, offset: Offset(0, 1)),
+            BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 2)),
           ],
         ),
         padding: EdgeInsets.all(s * 0.14),
-        child: _Pips(value: value, dotColor: widget.disabled ? Colors.white70 : const Color(0xFF1A1A1A)),
+        child: Stack(children: [
+          // Faint diagonal gloss streak for a glossy, polished-plastic feel.
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(s * 0.14),
+              child: Opacity(
+                opacity: widget.disabled ? 0.0 : 0.5,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.7,
+                    heightFactor: 0.35,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(s * 0.5),
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.white.withValues(alpha: 0.55),
+                            Colors.white.withValues(alpha: 0.0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _Pips(value: value, dotColor: widget.disabled ? Colors.white70 : const Color(0xFF1A1A1A)),
+        ]),
       ),
     );
   }
